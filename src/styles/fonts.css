@@ -1,0 +1,12 @@
+/* Google Fonts are loaded in index.html via <link> for optimal performance.
+   This file exists for any local @font-face overrides if needed in the future. */
+
+.serif {
+  font-family: 'Fraunces', serif;
+  font-optical-sizing: auto;
+  letter-spacing: -0.01em;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
