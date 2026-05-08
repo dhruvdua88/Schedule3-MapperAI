@@ -8,8 +8,9 @@
 // different names (e.g. 'deepseek-chat', 'deepseek-reasoner'), update the
 // DEFAULT_MODEL constant below and the Settings panel options accordingly.
 
-const BASE_URL     = 'https://api.deepseek.com';
+const BASE_URL      = 'https://api.deepseek.com';
 const DEFAULT_MODEL = 'deepseek-v4-pro';
+const TIMEOUT_MS    = 120_000; // 120 s — abort if DeepSeek doesn't respond
 
 // ---- Custom error classes ----
 export class AuthError extends Error {
@@ -32,6 +33,10 @@ export class ApiError extends Error {
  * @param {string}   opts.userPrompt   - User message (contains markdown + prompt)
  * @param {AbortSignal} [opts.signal]  - AbortController signal for cancellation
  * @param {function} [opts.onUsage]    - Called with {input_tokens, output_tokens} after response
+ * @param {function} [opts.onFirstToken] - Called once when the first content chunk arrives.
+ *                                         If provided, the call switches to streaming mode (SSE).
+ *                                         The final parsed JSON is still returned from the promise.
+ * @param {number}   [opts.temperature] - Sampling temperature (default: 0.2). SCH3 uses 0.1.
  * @returns {Promise<object>}          - Parsed JSON object from model response
  */
 export async function callDeepSeek({
@@ -41,8 +46,12 @@ export async function callDeepSeek({
   userPrompt,
   signal,
   onUsage,
+  onFirstToken,
+  temperature = 0.2,
 }) {
   if (!apiKey) throw new AuthError('No API key provided. Please add your DeepSeek API key in Settings.');
+
+  const useStreaming = typeof onFirstToken === 'function';
 
   let response;
   try {
@@ -60,8 +69,10 @@ export async function callDeepSeek({
           { role: 'user',   content: userPrompt },
         ],
         response_format: { type: 'json_object' },
-        temperature:  0.2,
+        temperature,
         max_tokens:   16000,
+        stream:       useStreaming,
+        ...(useStreaming ? { stream_options: { include_usage: true } } : {}),
       }),
     });
   } catch (err) {
@@ -94,17 +105,70 @@ export async function callDeepSeek({
     );
   }
 
-  const data = await response.json();
+  // ── Streaming path: read SSE chunks, fire onFirstToken on first content delta,
+  //    accumulate the full JSON, then parse at the end. ──
+  let content;
+  if (useStreaming) {
+    if (!response.body || !response.body.getReader) {
+      throw new ApiError('Streaming not supported in this environment.');
+    }
+    const reader  = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let firstTokenFired = false;
+    let accumulated = '';
+    let usage = null;
 
-  // Report token usage to caller
-  if (onUsage && data.usage) {
-    onUsage({
-      input_tokens:  data.usage.prompt_tokens    || 0,
-      output_tokens: data.usage.completion_tokens || 0,
-    });
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE frames are separated by double-newline; each frame is a "data:" line.
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() || '';
+      for (const frame of frames) {
+        const line = frame.trim();
+        if (!line.startsWith('data:')) continue;
+        const payload = line.slice(5).trim();
+        if (payload === '[DONE]') continue;
+        try {
+          const j = JSON.parse(payload);
+          const delta = j.choices?.[0]?.delta?.content;
+          if (delta) {
+            accumulated += delta;
+            if (!firstTokenFired) {
+              firstTokenFired = true;
+              try { onFirstToken(); } catch { /* user callback errors must not break stream */ }
+            }
+          }
+          if (j.usage) usage = j.usage;
+        } catch {
+          // skip malformed frame
+        }
+      }
+    }
+    content = accumulated;
+    if (onUsage && usage) {
+      onUsage({
+        input_tokens:  usage.prompt_tokens    || 0,
+        output_tokens: usage.completion_tokens || 0,
+      });
+    }
+  } else {
+    const data = await response.json();
+
+    // Report token usage to caller
+    if (onUsage && data.usage) {
+      onUsage({
+        input_tokens:  data.usage.prompt_tokens    || 0,
+        output_tokens: data.usage.completion_tokens || 0,
+      });
+    }
+
+    content = data.choices?.[0]?.message?.content;
   }
 
-  const content = data.choices?.[0]?.message?.content;
   if (!content) throw new ApiError('Empty response from DeepSeek API');
 
   // response_format: json_object should guarantee valid JSON, but handle edge cases

@@ -1,9 +1,11 @@
 // ============ CARO APPLICABILITY VIEW ============
 // Shows threshold test table and conclusion card.
+// When CARO has not been run yet, renders an empty-state CTA so the
+// user can run it on demand from the results screen.
 
 import React from 'react';
-import { AlertCircle, CheckCircle2 } from 'lucide-react';
-import { COLORS, FONTS, TH_STYLE, TD_STYLE } from '../styles/tokens.js';
+import { AlertCircle, CheckCircle2, ShieldCheck, Loader2 } from 'lucide-react';
+import { COLORS, FONTS, TH_STYLE, TD_STYLE, BTN_PRIMARY } from '../styles/tokens.js';
 
 function ResultPill({ result }) {
   const colors = {
@@ -23,8 +25,54 @@ function ResultPill({ result }) {
   );
 }
 
-export function CaroApplicabilityView({ app }) {
-  if (!app) return null;
+export function CaroApplicabilityView({ app, onRunCaroNow, caroRunning }) {
+  // Empty state — CARO was not run as part of this analysis.
+  if (!app) {
+    return (
+      <div className="fade-in">
+        <div className="card" style={{
+          padding: 36, borderRadius: 12,
+          textAlign: 'center',
+          border: `1px dashed ${COLORS.BORDER_STRONG}`,
+        }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: '50%',
+            background: COLORS.BG_CREAM,
+            border: `1px solid ${COLORS.BORDER}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 18px',
+          }}>
+            <ShieldCheck size={24} color={COLORS.TEXT_MUTED} strokeWidth={1.5} />
+          </div>
+          <h3 className="serif" style={{ fontSize: 22, fontWeight: 600, color: COLORS.TEXT, marginBottom: 8 }}>
+            CARO 2020 evaluation was skipped
+          </h3>
+          <p style={{ fontSize: 13, color: COLORS.TEXT_MUTED, maxWidth: 460, margin: '0 auto 22px', lineHeight: 1.55 }}>
+            You chose to run the Schedule III review only. Run the CARO 2020 applicability and
+            clause-flagging step now if you'd like the full Annexure A working paper.
+          </p>
+          {onRunCaroNow && (
+            <button
+              onClick={onRunCaroNow}
+              disabled={caroRunning}
+              style={{
+                ...BTN_PRIMARY,
+                padding: '12px 26px', fontSize: 14,
+                opacity: caroRunning ? 0.6 : 1,
+                cursor: caroRunning ? 'wait' : 'pointer',
+              }}
+            >
+              {caroRunning
+                ? <><Loader2 size={15} className="spin" /> Running CARO…</>
+                : <><ShieldCheck size={15} /> Run CARO 2020 analysis</>
+              }
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   const passColor = app.applies ? COLORS.CRIT : '#3e6034';
 
   return (

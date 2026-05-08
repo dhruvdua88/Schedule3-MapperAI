@@ -1,71 +1,294 @@
 // ============ AI PROMPTS ============
 //
-// SCH3_PROMPT  — 30-test Schedule III substantive review
-// CARO_PROMPT  — lightweight CARO 2020 applicability + clause-flagging
+// SCH3_PROMPT  — substantive Schedule III (Division I) review covering the
+//                24-Mar-2021 MCA amendment + AS compliance + Companies Act
+//                disclosures + presentation/rounding tests.
+// CARO_PROMPT  — lightweight CARO 2020 applicability + clause-flagging.
 //
-// DO NOT EDIT these prompts. They are the canonical tests extracted verbatim
-// from the source artifact and represent the business logic of this tool.
+// DO NOT EDIT casually. These prompts are the canonical business logic of
+// this tool. Any change here MUST be tested against at least one real
+// engagement before shipping.
 //
 // Usage:
 //   Schedule III: send as `userPrompt` after prepending the extracted markdown.
 //   CARO:         call CARO_PROMPT(keyMetrics, companyName, isFirstYear, natureOfBusiness)
 //                 and send the returned string as `userPrompt`.
 
-export const SCH3_PROMPT = `Reviewer: senior CA. Standards: Schedule III Division I (AS, Companies Act 2013, as amended 24-Mar-2021). Analyse attached PDF.
+export const SCH3_PROMPT = `Reviewer: senior Indian Chartered Accountant. Standards in scope:
+- Schedule III to the Companies Act 2013, Division I (AS basis), as amended by MCA Notification G.S.R. 207(E) dated 24-Mar-2021.
+- Accounting Standards (AS) notified under Section 133 read with the Companies (Accounting Standards) Rules, 2021.
+- Companies Act 2013 disclosures (Sec 134(3)(m), Sec 22 of MSMED Act 2006, Sec 135 CSR, Sec 197 Auditor's remuneration).
+- Rule 6 of Companies (Accounts) Rules 2014 — rounding off.
 
-Run the 30 tests below. For each test:
-- If trigger doesn't apply → SKIP (don't output)
-- If test PASSES → SKIP (don't output)
-- If test FAILS → output ONE issue with the test ID
+Analyse the attached PDF (extracted markdown) of the standalone financial statements.
 
-Return ONLY valid JSON (no markdown):
+────────────────────────────────────────────
+SEVERITY RUBRIC — apply strictly:
+- CRITICAL : Material misstatement, arithmetic break, or item that would warrant a qualification / adverse opinion.
+- HIGH     : Mandatory disclosure under amended Schedule III or AS is fully MISSING.
+- MEDIUM   : Disclosure present but incomplete, ambiguous, or wrongly classified.
+- LOW      : Presentation, rounding, comparatives, or cosmetic note structure only.
+
+EVIDENCE CONTRACT — every issue MUST cite either:
+(a) An actual rupee figure (in lakhs or as printed in the PDF), OR
+(b) A short verbatim quote (≤30 words) from the disclosure being flagged, OR
+(c) "Disclosure not located in the document" — only if you have read the entire markdown and the disclosure is genuinely absent.
+
+DO-NOT-FLAG list (common false positives):
+- Absence of the Director's Report or Board's Report (separate document, not in scope).
+- Absence of the Independent Auditor's Report (separate document, not in scope).
+- Absence of items relevant only to Ind AS Division II (Indian Accounting Standards) — this engagement is Division I.
+- "Specified Bank Notes" disclosure (defunct after FY 2016-17).
+- Absence of Cash Flow Statement for an OPC, Small Company or Dormant Company that qualifies for the AS-3 carve-out — verify against the company's classification before flagging.
+- Absence of Section 197 disclosure for a private limited company (Sec 197 only applies to public/listed companies).
+
+TEST EXECUTION RULE for each test:
+1. Read the TRIGGER — if not satisfied, SKIP this test silently (no output).
+2. If TRIGGER is satisfied, evaluate the FAIL-IF condition.
+3. If the test PASSES (no fail-if), SKIP silently.
+4. If the test FAILS, emit ONE issue with the test ID and complete fields.
+
+────────────────────────────────────────────
+RETURN ONLY VALID JSON (no markdown, no commentary):
+
 {
-  "company": {"name","cin","yearEnd","incorporationDate","registeredAddress","natureOfBusiness","isFirstYear","auditFirm","auditFirmFRN"},
-  "keyMetrics": {"revenueLakhs","profitBeforeTaxLakhs","profitAfterTaxLakhs","currentTaxLakhs","paidUpCapitalLakhs","reservesLakhs","totalBorrowingsLakhs","totalAssetsLakhs","tradeReceivablesLakhs","fixedAssetsLakhs","advanceTaxLakhs","isHoldingOrSubOfPublicCo"},
-  "scheduleIIIIssues": [{"id":"T01","severity":"CRITICAL|HIGH|MEDIUM|LOW","category":"string","title":"string","observation":"specific finding with rupee figures, ≤35 words","implication":"≤18 words","recommendation":"≤18 words"}]
+  "company": {
+    "name", "cin", "yearEnd", "incorporationDate", "registeredAddress",
+    "natureOfBusiness", "isFirstYear", "auditFirm", "auditFirmFRN"
+  },
+  "keyMetrics": {
+    "revenueLakhs", "profitBeforeTaxLakhs", "profitAfterTaxLakhs",
+    "currentTaxLakhs", "paidUpCapitalLakhs", "reservesLakhs",
+    "totalBorrowingsLakhs", "totalAssetsLakhs", "tradeReceivablesLakhs",
+    "fixedAssetsLakhs", "advanceTaxLakhs", "isHoldingOrSubOfPublicCo",
+    "averageNetProfit3YearsLakhs", "netWorthLakhs",
+    "isHoldingCompany", "isSubsidiaryCompany"
+  },
+  "scheduleIIIIssues": [
+    {
+      "id":             "T01",
+      "section":        "A",
+      "severity":       "CRITICAL|HIGH|MEDIUM|LOW",
+      "category":       "Disclosure|Classification|Computation|Policy|Presentation",
+      "title":          "≤ 12 words",
+      "observation":    "≤ 50 words. MUST cite a rupee figure or a verbatim phrase from the PDF where applicable.",
+      "evidenceQuote":  "≤ 30 words verbatim from the PDF, or 'Disclosure not located in the document' if missing.",
+      "noteRef":        "e.g. 'Note 12', 'Sch III Div I Gen Instr Para 6(L)(xi)', or 'Not provided'.",
+      "implication":    "≤ 25 words on the audit / compliance consequence.",
+      "recommendation": "≤ 25 words; concrete next step for the preparer."
+    }
+  ]
 }
 
-TESTS — flag ONLY failures, cite actual rupee figures:
+Order issues by severity: CRITICAL → HIGH → MEDIUM → LOW. Use the test ID as 'id'. Do not invent issues outside this test list.
 
-[A. INTERNAL CONSISTENCY — CRITICAL]
-T01 Tax-PBT alignment: PBT > 0 must have current tax > 0 (or MAT/exemption stated in notes).
-T02 PPE absent despite operations: revenue > 0 OR employee cost > 0 → PPE > 0 OR ROU/leasehold improvements disclosed OR rationale.
-T03 Cash flow tie-back: opening cash − closing cash = CFS net change.
-T04 Advance tax mismatch: Advance tax on BS > 0 but no current tax in P&L (or vice versa) without reconciliation.
-T05 Share issue expenses in P&L: Sec 35D / Sec 52 — these must be amortised or charged to share premium, NOT expensed in P&L.
+════════════════════════════════════════════
+SECTION A — INTERNAL CONSISTENCY [all CRITICAL]
+════════════════════════════════════════════
 
-[B. AMENDED SCH III — MANDATORY DISCLOSURES — HIGH]
-T06 Title deeds of immovable property note (if any immovable property exists, Sch III II(WB)(viii)).
-T07 Loans/advances to promoters/directors/KMP/related parties — separate disclosure (Sch III II(WB)(x)).
-T08 Benami property proceedings disclosure (Sch III II(WB)(ix)).
-T09 Wilful defaulter declaration (Sch III II(WB)(xi)).
-T10 Relationship with struck-off companies (Sch III II(WB)(xii)).
-T11 Registration of charges with ROC including pending satisfaction (Sch III II(WB)(xviii)).
-T12 Compliance with No. of Layers per Sec 2(87)(b) (Sch III II(WB)(xiii)).
-T13 Compliance with approved Scheme of Arrangement (Sch III II(WB)(xiv)).
-T14 Utilisation of borrowed funds and share premium for stated purpose (Sch III II(WB)(xv)).
-T15 Crypto / virtual currency dealings disclosure (Sch III II(WB)(xvii)).
-T16 Undisclosed income surrendered in tax assessments (Sch III II(WB)(xvi)).
-T17 Eleven Sch III ratios with prior-year + variance reasons if >25% (Sch III II(WB)(xix)).
-T18 Trade Receivables ageing schedule with disputed/undisputed split.
-T19 Trade Payables ageing schedule with MSME/Others split.
-T20 Capital WIP ageing schedule (if CWIP > 0).
-T21 Intangible Asset under Development ageing (if such asset > 0).
+T01  Tax–PBT alignment.
+     TRIGGER  : Profit Before Tax > 0.
+     FAIL IF  : Current tax expense = 0 AND no MAT computation, Sec 80-IAC / 115BAA / 115BAB / 115BAC election, brought-forward loss, or other exemption is disclosed in the notes.
 
-[C. AS COMPLIANCE — HIGH/MEDIUM]
-T22 AS-3 Cash Flow Statement (mandatory unless Small Co/OPC).
-T23 AS-15(R) actuarial disclosures for gratuity / leave encashment (assumptions + DBO recon).
-T24 AS-18 Related Party — relationships, transactions, year-end balances.
-T25 AS-22 Deferred tax — DTA recognition prudence assessed.
-T26 AS-20 EPS — Basic + Diluted with face value, weighted avg, numerator reconciliation.
-T27 AS-29 Contingent Liabilities & Commitments note.
+T02  PPE absent despite operations.
+     TRIGGER  : Revenue from operations > 0 OR Employee benefits expense > 0.
+     FAIL IF  : Property, Plant & Equipment = 0 AND no Right-of-Use asset / Leasehold improvement / capital-light rationale (e.g., pure trading on commission, services from leased premises) is disclosed.
 
-[D. COMPANIES ACT — MEDIUM]
-T28 MSMED Act 2006 Section 22 — six-clause disclosure (principal due, interest due, paid beyond 45 days, interest accrued, interest paid, interest remaining).
-T29 Forex Earnings & Outgo per Sec 134(3)(m) read with Rule 8 Companies (Accounts) Rules 2014.
-T30 Auditor's remuneration disaggregation (Statutory audit / Tax audit / Other services / OOP) and promoter shareholding "% Change during the year".
+T03  Cash flow tie-back.
+     TRIGGER  : Cash Flow Statement is presented.
+     FAIL IF  : (Opening cash & cash equivalents − Closing cash & cash equivalents) does NOT equal the Net Increase/Decrease line in the CFS, OR the closing balance in the CFS does not tie to the Balance Sheet "Cash and cash equivalents" line.
 
-Output: order by severity CRITICAL → HIGH → MEDIUM → LOW. Use test ID as 'id'. Cite actual rupee figures. Be specific — NO generic statements.`;
+T04  Advance tax / Provision for tax presentation.
+     TRIGGER  : Both "Advance income tax (net of provision)" and "Provision for tax (net of advance)" appear, OR Advance tax > 0 with no Current tax in P&L.
+     FAIL IF  : The two are not netted off where the same governing tax law applies, OR no reconciliation note is given.
+
+T05  Share-issue / IPO / preliminary expenses charged to P&L.
+     TRIGGER  : The P&L or notes disclose share issue expenses, IPO expenses, or preliminary expenses.
+     FAIL IF  : The amount is expensed directly to P&L without amortisation under Sec 35D OR being written off against securities premium under Sec 52(2)(c).
+
+T06  Reserves & Surplus arithmetic.
+     TRIGGER  : Reserves & Surplus note is presented with opening, additions and deductions.
+     FAIL IF  : Opening balance + Profit for the year ± transfers − dividend − tax on dividend − other appropriations does NOT equal the Closing balance for any individual reserve line.
+
+════════════════════════════════════════════
+SECTION B — 2021 MCA AMENDMENT MANDATORY DISCLOSURES [all HIGH unless noted]
+════════════════════════════════════════════
+
+T07  Title deeds of immovable property.
+     TRIGGER  : Land or buildings appear under PPE / Investment Property.
+     FAIL IF  : The "Title deeds of immovable property NOT held in the name of the Company" tabular disclosure (gross block, held in name of, whether promoter/director/relative/employee, period, reason) is absent. If all title deeds ARE in the company's name, an explicit affirmative statement to that effect is required.
+
+T08  Revaluation of PPE / Intangible assets.
+     TRIGGER  : The accounting policy mentions revaluation OR a revaluation reserve appears under Reserves & Surplus.
+     FAIL IF  : Disclosure does not specify that revaluation was based on the valuation by a registered valuer as defined under Rule 2 of the Companies (Registered Valuers and Valuation) Rules 2017.
+
+T09  Loans/advances to promoters, directors, KMP, related parties.
+     TRIGGER  : Loans & advances or other receivables are disclosed.
+     FAIL IF  : Separate tabular disclosure is missing — "Type of borrower" (Promoter / Director / KMP / Related Party), "Amount of loan or advance in nature of loan outstanding", "Percentage to total Loans and Advances in nature of loans", with comparatives.
+
+T10  CWIP ageing schedule.
+     TRIGGER  : Capital Work-in-Progress > 0.
+     FAIL IF  : Ageing schedule with buckets <1 year / 1-2 / 2-3 / >3 years is missing, OR projects-in-progress vs temporarily-suspended split is missing, OR for projects whose completion is overdue or has exceeded its original cost, the to-be-completed-in (<1y/1-2y/2-3y/>3y) schedule is missing.
+
+T11  Intangible assets under development — ageing.
+     TRIGGER  : Intangible assets under development > 0.
+     FAIL IF  : Ageing schedule with buckets <1 year / 1-2 / 2-3 / >3 years is missing, OR overdue/cost-overrun schedule is missing.
+
+T12  Benami property proceedings.
+     FAIL IF  : The amended Schedule III declaration on whether any proceedings have been initiated or are pending against the Company under the Benami Transactions (Prohibition) Act, 1988 and Rules thereunder is missing. (Affirmative "No proceedings" statement is acceptable.)
+
+T13  Quarterly returns / statements with banks or FIs (current-asset security).
+     TRIGGER  : Borrowings from banks or financial institutions on the security of current assets (cash credit, working-capital limit, drawee bills) appear.
+     FAIL IF  : Reconciliation of the quarterly returns / statements of current assets filed by the Company with the books of account is missing, OR material differences (with reasons) are not disclosed.
+
+T14  Wilful defaulter declaration.
+     FAIL IF  : Declaration that the Company has not been declared a wilful defaulter by any bank or FI or other lender (per RBI Master Direction) is missing — date of declaration and details required if declared. Affirmative "No" statement is acceptable.
+
+T15  Relationship with struck-off companies.
+     FAIL IF  : Disclosure of investments, balances receivable/payable, shares held with companies struck off under Sec 248 of the Companies Act 2013 / Sec 560 of the Companies Act 1956 is missing. Affirmative "No transactions" statement is acceptable.
+
+T16  Registration / satisfaction of charges with ROC.
+     TRIGGER  : The Company has any borrowings or debentures.
+     FAIL IF  : Disclosure of registration of charges or satisfaction with the Registrar of Companies, including any pendency beyond the statutory period (within 30 days of creation), is missing.
+
+T17  Compliance with Number of Layers — Sec 2(87)(b).
+     TRIGGER  : The Company has subsidiaries.
+     FAIL IF  : Disclosure of compliance with the Companies (Restriction on number of Layers) Rules 2017 is missing. CIN of each layer (where in compliance with the cap of 2 layers) should be provided.
+
+T18  Approved Scheme of Arrangement.
+     TRIGGER  : The notes refer to a Scheme of Arrangement under Sec 230-237.
+     FAIL IF  : Disclosure that the accounting treatment is in accordance with the approved Scheme is missing, OR any deviation is not separately quantified and explained.
+
+T19  Utilisation of borrowed funds and share premium — Intermediary / Ultimate Beneficiary.
+     FAIL IF  : The two-pronged disclosure (funds advanced/loaned/invested in Intermediaries; funds received from Funding Parties — both with the Ultimate Beneficiary representation) is missing. If material amounts exist, the recipient details, amounts, and date of recording should be tabulated.
+
+T20  Crypto / virtual currency.
+     FAIL IF  : Disclosure on whether the Company has traded or invested in crypto or virtual currency during the year is missing — including profit/loss on transactions, amount of currency held at year-end, and deposits or advances received from any person for trading or investing in such currency. Affirmative "No transactions" statement is acceptable.
+
+T21  Undisclosed income surrendered.
+     TRIGGER  : The notes / tax computation refer to any survey, search, or income-tax assessment.
+     FAIL IF  : Disclosure of any transaction not recorded in the books that has been surrendered or disclosed as income during the year in tax assessments under the Income Tax Act 1961 (search under Sec 132, survey under Sec 133A, etc.) is missing, OR if such income exists, treatment in the books is not stated.
+
+T22  Eleven Schedule III ratios + variance reasons.
+     FAIL IF  : Any of the following 11 ratios is missing OR prior-year comparative is missing OR the explanation of variance > 25% (current vs prior year) is missing where applicable:
+     (i) Current Ratio  (ii) Debt-Equity Ratio  (iii) Debt Service Coverage Ratio
+     (iv) Return on Equity Ratio  (v) Inventory Turnover Ratio
+     (vi) Trade Receivables Turnover Ratio  (vii) Trade Payables Turnover Ratio
+     (viii) Net Capital Turnover Ratio  (ix) Net Profit Ratio
+     (x) Return on Capital Employed  (xi) Return on Investment.
+
+T23  Trade Receivables ageing schedule.
+     TRIGGER  : Trade Receivables > 0.
+     FAIL IF  : Ageing buckets are not in the prescribed format — Less than 6 months / 6 months-1 yr / 1-2 yr / 2-3 yr / More than 3 yr — split into Undisputed-considered-good / Undisputed-considered-doubtful / Disputed-considered-good / Disputed-considered-doubtful, with comparatives.
+
+T24  Trade Payables ageing schedule.
+     TRIGGER  : Trade Payables > 0.
+     FAIL IF  : Ageing buckets are not — Less than 1 yr / 1-2 yr / 2-3 yr / More than 3 yr — split into MSME / Others / Disputed dues to MSME / Disputed dues to Others, with comparatives.
+
+════════════════════════════════════════════
+SECTION C — OTHER MANDATORY SCH III PRESENTATION [HIGH / MEDIUM]
+════════════════════════════════════════════
+
+T25  Promoter shareholding disclosure. [HIGH]
+     TRIGGER  : The Company is not exempt from this disclosure (i.e., is a normal company).
+     FAIL IF  : The note "Shares held by promoters at the end of the year" — with name of promoter, no. of shares, % of total shares, AND % change during the year, with comparatives — is missing or incomplete.
+
+T26  Money received against share warrants. [MEDIUM]
+     TRIGGER  : The Balance Sheet shows any line referring to share warrants OR convertibles.
+     FAIL IF  : "Money received against share warrants" is not disclosed on the face of the BS as a separate line under Shareholders' Funds (between Reserves & Surplus and Money received against share warrants), with terms of conversion, forfeiture, and number of warrants.
+
+T27  Share application money pending allotment. [MEDIUM]
+     TRIGGER  : The notes refer to share application money received but unallotted.
+     FAIL IF  : The classification (current vs non-current), refundability, number of shares to be issued, premium, and terms of allotment are not disclosed.
+
+T28  Reserves & Surplus break-up. [HIGH]
+     TRIGGER  : Reserves & Surplus > 0.
+     FAIL IF  : The reserves are not broken up into the prescribed line items as applicable — Capital Reserve, Capital Redemption Reserve, Securities Premium, Debenture Redemption Reserve, Revaluation Reserve, Share Options Outstanding Account, Other Reserves (specify nature), and Surplus i.e. balance in Statement of P&L.
+
+T29  Capital advances classification. [HIGH]
+     TRIGGER  : Capital advances appear in the notes.
+     FAIL IF  : Capital advances are shown within Capital Work-in-Progress instead of under Long-term loans and advances. Amended Sch III explicitly requires capital advances under Long-term loans & advances.
+
+T30  Cash & cash equivalents vs Other bank balances. [MEDIUM]
+     TRIGGER  : Bank balances or fixed deposits appear under Current Assets.
+     FAIL IF  : Fixed deposits with original maturity > 3 months and ≤ 12 months are not split out under "Other bank balances" (separate sub-head from Cash and cash equivalents), OR margin money / lien deposits are not separately disclosed.
+
+T31  Comparative figures and reclassification. [MEDIUM]
+     FAIL IF  : Any line on the Balance Sheet, Statement of P&L, or Cash Flow Statement is missing the prior-year comparative figure, OR where current-year presentation differs from prior year, the reclassification footnote is missing.
+
+T32  Rounding-off compliance — Sch III Gen Instr Para 4. [LOW]
+     FAIL IF  : The rounding policy is not stated, OR the unit chosen is not in the permitted set:
+       Total income < Rs 100 cr   → Hundreds / Thousands / Lakhs / Millions / Decimals.
+       Total income ≥ Rs 100 cr   → Lakhs / Millions / Crores / Decimals.
+     OR the rounding unit is not consistent across BS, P&L, CFS, and Notes.
+
+════════════════════════════════════════════
+SECTION D — AS COMPLIANCE [HIGH / MEDIUM]
+════════════════════════════════════════════
+
+T33  AS-3 Cash Flow Statement. [HIGH]
+     TRIGGER  : Company is NOT an OPC / Small Company / Dormant Company.
+     FAIL IF  : Cash Flow Statement is missing, OR direct/indirect method is mixed inconsistently, OR cash & cash equivalents are not reconciled to the Balance Sheet.
+
+T34  AS-15(R) actuarial disclosures. [HIGH]
+     TRIGGER  : Gratuity, leave encashment, or other defined benefit obligation appears.
+     FAIL IF  : Any of these is missing — actuarial assumption table (discount rate, salary escalation, attrition, mortality table), DBO opening-to-closing reconciliation, plan asset reconciliation (if funded), expense recognised in P&L, current vs non-current bifurcation of net liability/asset.
+
+T35  AS-18 Related Party. [HIGH]
+     TRIGGER  : The notes identify any related parties.
+     FAIL IF  : List of relationships and parties is not given, OR transactions in summary by category and party are not given, OR year-end balances (receivable/payable) are not given, OR a blanket "as identified by management" statement substitutes for actual party names.
+
+T36  AS-22 Deferred tax — DTA prudence. [HIGH]
+     TRIGGER  : Deferred Tax Asset is recognised AND brought-forward loss / unabsorbed depreciation exists.
+     FAIL IF  : The note does NOT assert "virtual certainty supported by convincing evidence" of future taxable income (a higher bar than "reasonable certainty"), OR does not describe the convincing evidence, OR DTA on losses is recognised when only "reasonable certainty" is asserted.
+
+T37  AS-20 EPS. [MEDIUM]
+     FAIL IF  : Both Basic and Diluted EPS are not disclosed on the face of the P&L, OR face value of equity share, weighted-average number of shares, and reconciliation of numerator (net profit attributable to equity shareholders) are not in the notes.
+
+T38  AS-29 Provisions, Contingent Liabilities, Capital Commitments. [HIGH]
+     FAIL IF  : Contingent liabilities note is missing, OR estimated amounts of contracts remaining to be executed on capital account and not provided for is missing, OR provisions movement (opening/additions/utilised/reversed/closing) for non-routine provisions is missing.
+
+T39  AS-2 Inventory valuation policy. [MEDIUM]
+     TRIGGER  : Inventories > 0.
+     FAIL IF  : The accounting policy does not state the cost formula (FIFO / Weighted Average / Specific identification) AND the basis (lower of cost or net realisable value).
+
+T40  AS-16 Borrowing costs. [MEDIUM]
+     TRIGGER  : Capital Work-in-Progress > 0 OR borrowings exist alongside qualifying assets.
+     FAIL IF  : Amount of borrowing costs capitalised on qualifying assets during the year, and the capitalisation rate used, are not disclosed.
+
+════════════════════════════════════════════
+SECTION E — COMPANIES ACT / OTHER STATUTES [MEDIUM]
+════════════════════════════════════════════
+
+T41  MSMED Act 2006 — Section 22 verbatim six-clause disclosure.
+     FAIL IF  : Any of these is missing — (a) principal amount and (b) interest due thereon remaining unpaid to MSME suppliers; (c) interest paid under Sec 16 read with payments made beyond appointed day; (d) interest due and payable for delay; (e) interest accrued and remaining unpaid at year-end; (f) further interest remaining due in succeeding years until actually paid.
+
+T42  Forex Earnings & Outgo — Sec 134(3)(m) read with Rule 8 Companies (Accounts) Rules 2014.
+     TRIGGER  : The Company is not a One-Person Company / Small Company / specified exempt entity.
+     FAIL IF  : Earnings in foreign currency and Expenditure in foreign currency are not disclosed in the notes for inclusion in the Board's Report.
+
+T43  Auditor's remuneration disaggregation.
+     FAIL IF  : Auditor's remuneration is shown as a single line without disaggregation into — Statutory audit fee / Tax audit fee / Other services / Reimbursement of out-of-pocket expenses / GST or Service tax.
+
+T44  CSR — Sec 135.
+     TRIGGER  : Average Net Profit (3 years) ≥ Rs 5 crore OR Net Worth ≥ Rs 500 crore OR Turnover ≥ Rs 1,000 crore.
+     FAIL IF  : Any of the prescribed CSR disclosures is missing — amount required to be spent, amount spent during the year (in cash / yet to be paid), shortfall, total of previous years' shortfall, reason for shortfall, nature of CSR activities, contribution to a related-party trust, where ongoing project — amount transferred to "Unspent CSR Account" within 30 days of FY-end.
+
+T45  Dividend disclosure. [LOW]
+     TRIGGER  : Dividend has been proposed or declared.
+     FAIL IF  : Proposed dividend is provided as a liability instead of being disclosed only in the notes (post-revision to AS-4 effective FY 2016-17), OR arrears of fixed cumulative dividend on preference shares are not disclosed.
+
+T46  Note 1 (Corporate Information) and Note 2 (Significant Accounting Policies). [MEDIUM]
+     FAIL IF  : Note 1 is missing or does not state the registered office, nature of business, and CIN; OR Note 2 is missing any of these policies that are relevant to the company — basis of preparation, revenue recognition, depreciation method and rates (with WDV/SLM), foreign currency, employee benefits, leases, taxation, inventories, borrowing costs, impairment, provisions/contingent liabilities, earnings per share.
+
+════════════════════════════════════════════
+FINAL SELF-REVIEW PASS — perform before returning the JSON:
+- Re-read every issue. Drop any that lack an evidenceQuote AND a rupee figure (unless you have explicitly said "Disclosure not located in the document" after a thorough read).
+- Drop any issue that conflicts with the DO-NOT-FLAG list.
+- Confirm that every issue's severity matches the SEVERITY RUBRIC.
+- Confirm sort order: CRITICAL → HIGH → MEDIUM → LOW.
+- Return ONLY the JSON object.
+════════════════════════════════════════════`;
 
 // CARO_PROMPT is a function that embeds key metrics into the prompt.
 // Returns the full user prompt string for the CARO analysis call.

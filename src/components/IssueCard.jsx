@@ -1,6 +1,7 @@
 // ============ ISSUE CARD ============
 // Renders a single Schedule III finding with severity badge,
-// category, observation, implication, and recommendation.
+// category, observation, evidence quote, note reference,
+// implication, and recommendation.
 
 import React from 'react';
 import { SEVERITY, COLORS, FONTS } from '../styles/tokens.js';
@@ -15,6 +16,52 @@ function IssueField({ label, body, last }) {
         {label}
       </div>
       <div style={{ fontSize: 13, lineHeight: 1.55, color: COLORS.TEXT }}>{body}</div>
+    </div>
+  );
+}
+
+function EvidenceField({ quote, noteRef }) {
+  if (!quote && !noteRef) return null;
+  return (
+    <div style={{
+      marginBottom: 10,
+      background: COLORS.BG_CREAM,
+      border: `1px solid ${COLORS.BORDER}`,
+      borderRadius: 6,
+      padding: '8px 12px',
+    }}>
+      <div style={{
+        fontSize: 10, color: COLORS.TEXT_MUTED, textTransform: 'uppercase',
+        letterSpacing: '0.08em', marginBottom: 3, fontWeight: 600,
+        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+      }}>
+        <span>Evidence</span>
+        {noteRef && (
+          <span className="mono" style={{
+            background: '#fffdf7',
+            border: `1px solid ${COLORS.BORDER}`,
+            padding: '1px 6px',
+            borderRadius: 3,
+            fontSize: 10,
+            color: COLORS.TEXT_MUTED,
+            textTransform: 'none',
+            letterSpacing: 0,
+            fontWeight: 500,
+          }}>
+            {noteRef}
+          </span>
+        )}
+      </div>
+      {quote && (
+        <div style={{
+          fontSize: 12,
+          fontStyle: 'italic',
+          lineHeight: 1.55,
+          color: COLORS.TEXT_MUTED,
+        }}>
+          “{quote}”
+        </div>
+      )}
     </div>
   );
 }
@@ -44,6 +91,16 @@ export function IssueCard({ issue, index }) {
         <span className="mono" style={{ fontSize: 10, color: COLORS.TEXT_MUTED }}>
           #{String(index).padStart(2, '0')}
         </span>
+        {issue.id && (
+          <span className="mono" style={{
+            fontSize: 10, color: COLORS.PRIMARY,
+            background: COLORS.BG_CREAM,
+            border: `1px solid ${COLORS.BORDER}`,
+            padding: '1px 6px', borderRadius: 3, fontWeight: 600,
+          }}>
+            {issue.id}
+          </span>
+        )}
         <span style={{ fontSize: 10, color: COLORS.TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           {issue.category}
         </span>
@@ -55,6 +112,7 @@ export function IssueCard({ issue, index }) {
       </div>
 
       <IssueField label="Observation"    body={issue.observation} />
+      <EvidenceField quote={issue.evidenceQuote} noteRef={issue.noteRef} />
       <IssueField label="Implication"    body={issue.implication} />
       <IssueField label="Recommendation" body={issue.recommendation} last />
     </div>

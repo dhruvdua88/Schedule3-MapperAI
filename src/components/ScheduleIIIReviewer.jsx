@@ -49,8 +49,14 @@ function Metric({ label, value, alert }) {
   );
 }
 
-function CompanyHeader({ company, metrics, counts, caroApplies }) {
+function CompanyHeader({ company, metrics, counts, caroApplies, caroRun }) {
   const totalIssues = (counts.CRITICAL || 0) + (counts.HIGH || 0) + (counts.MEDIUM || 0) + (counts.LOW || 0);
+  const caroLabel = !caroRun
+    ? 'Not run'
+    : (caroApplies ? 'Applies' : 'Does not apply');
+  const caroColor = !caroRun
+    ? COLORS.TEXT_MUTED
+    : (caroApplies ? COLORS.CRIT : '#3e6034');
   return (
     <div className="card fade-in" style={{ padding: 24, borderRadius: 12, marginBottom: 28 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, marginBottom: 20 }}>
@@ -87,8 +93,8 @@ function CompanyHeader({ company, metrics, counts, caroApplies }) {
           </div>
           <div style={{ fontSize: 11, color: COLORS.TEXT_MUTED, marginTop: 4 }}>
             CARO 2020:{' '}
-            <strong style={{ color: caroApplies ? COLORS.CRIT : '#3e6034' }}>
-              {caroApplies ? 'Applies' : 'Does not apply'}
+            <strong style={{ color: caroColor }}>
+              {caroLabel}
             </strong>
           </div>
         </div>
@@ -163,6 +169,21 @@ export function ScheduleIIIReviewer() {
   const [analysisError, setAnalysisError] = useState('');
   const [tokenUsage,  setTokenUsage]  = useState({ sch3: null, caro: null });
   const abortRef = useRef(null);
+
+  // ── Per-run controls (overridable in PdfMarkdownPreview before each Analyse) ──
+  const [selectedModel, setSelectedModel] = useState(() => getSettings().model || 'deepseek-v4-pro');
+  const [runCaro,       setRunCaro]       = useState(true);
+  // Tracks whether the model has begun streaming output for the active call.
+  const [analysisStartedAt,    setAnalysisStartedAt]    = useState(null);
+  const [firstTokenReceivedAt, setFirstTokenReceivedAt] = useState(null);
+
+  // Keep selectedModel in sync if the user changes the default in Settings.
+  useEffect(() => {
+    if (settings.model && settings.model !== selectedModel) {
+      setSelectedModel(settings.model);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.model]);
 
   // ── Results ──
   const [tab,          setTab]         = useState('issues');
@@ -244,10 +265,53 @@ export function ScheduleIIIReviewer() {
   };
 
   // ════════════════════════════════════════════════════
-  // ANALYSIS (SCH3 → CARO)
+  // ANALYSIS (SCH3 → optionally CARO)
   // ════════════════════════════════════════════════════
-  const runAnalysis = async (mdText) => {
+
+  // Internal helper: run CARO given a Schedule III analysis result, an abort signal,
+  // and an existing reportFields snapshot to merge into auto-save.
+  // Returns the merged CARO object (with applicability + clauses).
+  const _runCaroCall = async (sch3, ctrl) => {
+    const caroJson = await callDeepSeek({
+      apiKey,
+      model:        selectedModel,
+      systemPrompt: 'You are a senior Chartered Accountant applying CARO 2020 to Indian companies.',
+      userPrompt:   CARO_PROMPT(
+        sch3.keyMetrics,
+        sch3.company?.name,
+        sch3.company?.isFirstYear,
+        sch3.company?.natureOfBusiness,
+      ),
+      signal:       ctrl.signal,
+      onUsage:      (u) => setTokenUsage((prev) => ({ ...prev, caro: u })),
+      onFirstToken: () => setFirstTokenReceivedAt(Date.now()),
+    });
+
+    // Merge ICAI standard wording with AI-flagged review status
+    const statusMap = new Map();
+    (caroJson.clauseStatus || []).forEach((s) => statusMap.set(s.paragraph, s));
+
+    const mergedClauses = caroJson.applicability?.applies
+      ? STANDARD_CARO_REMARKS.map((std) => {
+          const status = statusMap.get(std.paragraph) || { needsReview: false, reviewNote: '' };
+          return {
+            paragraph:     std.paragraph,
+            topic:         std.topic,
+            applicability: status.needsReview ? 'Review' : 'Standard',
+            needsReview:   !!status.needsReview,
+            reviewNote:    status.reviewNote || '',
+            remark:        std.standard,
+            edited:        false,
+          };
+        })
+      : [];
+
+    return { applicability: caroJson.applicability, clauses: mergedClauses };
+  };
+
+  const runAnalysis = async (mdText, opts = {}) => {
     if (!mdText?.trim()) return;
+    const shouldRunCaro = opts.runCaro !== undefined ? opts.runCaro : runCaro;
     setAnalysisError('');
 
     // Fresh AbortController for this run
@@ -258,55 +322,32 @@ export function ScheduleIIIReviewer() {
       // ── Phase 1: Schedule III ──────────────────────────────────────────
       setPhase('analyzing-sch3');
       setTokenUsage({ sch3: null, caro: null });
+      setAnalysisStartedAt(Date.now());
+      setFirstTokenReceivedAt(null);
 
       const sch3 = await callDeepSeek({
         apiKey,
-        model:        settings.model,
+        model:        selectedModel,
         systemPrompt: 'You are a senior Chartered Accountant reviewing Indian company financial statements for Schedule III compliance.',
         userPrompt:   `${mdText}\n\n${SCH3_PROMPT}`,
         signal:       ctrl.signal,
+        temperature:  0.1,
         onUsage:      (u) => setTokenUsage((prev) => ({ ...prev, sch3: u })),
+        onFirstToken: () => setFirstTokenReceivedAt(Date.now()),
       });
       setAnalysis(sch3);
 
-      // ── Phase 2: CARO ──────────────────────────────────────────────────
-      setPhase('analyzing-caro');
-
-      const caroJson = await callDeepSeek({
-        apiKey,
-        model:        settings.model,
-        systemPrompt: 'You are a senior Chartered Accountant applying CARO 2020 to Indian companies.',
-        userPrompt:   CARO_PROMPT(
-          sch3.keyMetrics,
-          sch3.company?.name,
-          sch3.company?.isFirstYear,
-          sch3.company?.natureOfBusiness,
-        ),
-        signal:       ctrl.signal,
-        onUsage:      (u) => setTokenUsage((prev) => ({ ...prev, caro: u })),
-      });
-
-      // Merge ICAI standard wording with AI-flagged review status
-      const statusMap = new Map();
-      (caroJson.clauseStatus || []).forEach((s) => statusMap.set(s.paragraph, s));
-
-      const mergedClauses = caroJson.applicability?.applies
-        ? STANDARD_CARO_REMARKS.map((std) => {
-            const status = statusMap.get(std.paragraph) || { needsReview: false, reviewNote: '' };
-            return {
-              paragraph:     std.paragraph,
-              topic:         std.topic,
-              applicability: status.needsReview ? 'Review' : 'Standard',
-              needsReview:   !!status.needsReview,
-              reviewNote:    status.reviewNote || '',
-              remark:        std.standard,
-              edited:        false,
-            };
-          })
-        : [];
-
-      const finalCaro = { applicability: caroJson.applicability, clauses: mergedClauses };
-      setCaro(finalCaro);
+      // ── Phase 2: CARO (optional) ───────────────────────────────────────
+      let finalCaro = null;
+      if (shouldRunCaro) {
+        setPhase('analyzing-caro');
+        setAnalysisStartedAt(Date.now());
+        setFirstTokenReceivedAt(null);
+        finalCaro = await _runCaroCall(sch3, ctrl);
+        setCaro(finalCaro);
+      } else {
+        setCaro(null);
+      }
 
       // ── Auto-save engagement ───────────────────────────────────────────
       saveEngagement({ analysis: sch3, caro: finalCaro, reportFields });
@@ -321,6 +362,36 @@ export function ScheduleIIIReviewer() {
       }
       console.error('Analysis failed:', err);
       let msg = err.message || 'Analysis failed.';
+      if (err instanceof AuthError)     msg = 'Invalid DeepSeek API key. Please check your key in Settings.';
+      if (err instanceof RateLimitError) msg = 'DeepSeek rate limit hit. Please wait a moment and try again.';
+      setAnalysisError(msg);
+      setPhase('error');
+    }
+  };
+
+  // Run CARO standalone — used from the Done state when CARO was skipped initially.
+  const runCaroOnly = async () => {
+    if (!analysis) return;
+    setAnalysisError('');
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    try {
+      setPhase('analyzing-caro');
+      setAnalysisStartedAt(Date.now());
+      setFirstTokenReceivedAt(null);
+      // Don't reset SCH3 token usage — we're only adding CARO usage.
+      setTokenUsage((prev) => ({ ...prev, caro: null }));
+      const finalCaro = await _runCaroCall(analysis, ctrl);
+      setCaro(finalCaro);
+      saveEngagement({ analysis, caro: finalCaro, reportFields });
+      setPhase('done');
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setPhase('done');
+        return;
+      }
+      console.error('CARO analysis failed:', err);
+      let msg = err.message || 'CARO analysis failed.';
       if (err instanceof AuthError)     msg = 'Invalid DeepSeek API key. Please check your key in Settings.';
       if (err instanceof RateLimitError) msg = 'DeepSeek rate limit hit. Please wait a moment and try again.';
       setAnalysisError(msg);
@@ -427,6 +498,11 @@ export function ScheduleIIIReviewer() {
     setReportFields({ ...DEFAULT_REPORT_FIELDS });
     setTokenUsage({ sch3: null, caro: null });
     setTab('issues');
+    // Reset per-run controls back to defaults
+    setRunCaro(true);
+    setSelectedModel(settings.model || 'deepseek-v4-pro');
+    setAnalysisStartedAt(null);
+    setFirstTokenReceivedAt(null);
   };
 
   // ════════════════════════════════════════════════════
@@ -533,13 +609,24 @@ export function ScheduleIIIReviewer() {
             pdfMeta={pdfMeta}
             onMarkdownChange={setMarkdown}
             onReExtract={() => runExtract()}
-            onAnalyze={(md) => runAnalysis(md)}
+            onAnalyze={(md) => runAnalysis(md, { runCaro })}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            runCaro={runCaro}
+            onRunCaroChange={setRunCaro}
           />
         )}
 
         {/* ── ANALYZING ── */}
         {(phase === 'analyzing-sch3' || phase === 'analyzing-caro') && (
-          <AnalyzingProgress phase={phase} onCancel={cancelAnalysis} />
+          <AnalyzingProgress
+            phase={phase}
+            onCancel={cancelAnalysis}
+            model={selectedModel}
+            runCaro={runCaro}
+            startedAt={analysisStartedAt}
+            firstTokenAt={firstTokenReceivedAt}
+          />
         )}
 
         {/* ── ERROR ── */}
@@ -574,6 +661,7 @@ export function ScheduleIIIReviewer() {
               metrics={analysis.keyMetrics || {}}
               counts={counts}
               caroApplies={caro?.applicability?.applies}
+              caroRun={!!caro}
             />
 
             {/* Tab bar */}
@@ -615,9 +703,12 @@ export function ScheduleIIIReviewer() {
               </div>
             )}
 
-            {/* CARO applicability tab */}
-            {tab === 'caro' && caro && (
-              <CaroApplicabilityView app={caro.applicability} />
+            {/* CARO applicability tab — shows empty state with "Run now" CTA when CARO was skipped */}
+            {tab === 'caro' && (
+              <CaroApplicabilityView
+                app={caro?.applicability}
+                onRunCaroNow={runCaroOnly}
+              />
             )}
 
             {/* CARO clauses tab */}

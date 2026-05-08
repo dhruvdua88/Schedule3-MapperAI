@@ -334,10 +334,10 @@ export async function exportExcel({ analysis, caro, reportFields }) {
     pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 } },
     headerFooter: { oddHeader: `&L&"Calibri,Bold"&14${co.name || ''}&R&"Calibri,Italic"&10Schedule III Working Paper`, oddFooter: `&L${rf.firmName} · ${rf.firmFRN}&CCONFIDENTIAL&RPage &P of &N` },
   });
-  issWS.columns = [{ width: 9 },{ width: 13 },{ width: 24 },{ width: 40 },{ width: 75 },{ width: 52 },{ width: 52 },{ width: 15 },{ width: 34 }];
+  issWS.columns = [{ width: 9 },{ width: 13 },{ width: 24 },{ width: 40 },{ width: 75 },{ width: 50 },{ width: 22 },{ width: 52 },{ width: 52 },{ width: 15 },{ width: 34 }];
 
   // Title
-  issWS.mergeCells('A1:I2');
+  issWS.mergeCells('A1:K2');
   const issTitle = issWS.getCell('A1');
   issTitle.value = { richText: [
     { text: 'SCHEDULE III SUBSTANTIVE REVIEW\n', font: { name: 'Calibri', size: 18, bold: true, color: { argb: C.WHITE } } },
@@ -345,18 +345,21 @@ export async function exportExcel({ analysis, caro, reportFields }) {
   ]};
   issTitle.fill = FILL_GREEN; issTitle.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
   issWS.getRow(1).height = 32; issWS.getRow(2).height = 22;
-  issWS.mergeCells('A3:I3');
+  issWS.mergeCells('A3:K3');
   const issSub = issWS.getCell('A3');
   issSub.value = 'Sorted by severity · use filter chips on row 4 to drill in · severity badges are colour-coded';
   issSub.font = FS; issSub.fill = FILL_SAND; issSub.alignment = { horizontal: 'center', vertical: 'middle' };
   issWS.getRow(3).height = 18;
 
   const tableRows = issuesSorted.length === 0
-    ? [['—','—','—','No issues flagged','—','—','—','—','']]
+    ? [['—','—','—','No issues flagged','—','—','—','—','—','—','']]
     : issuesSorted.map((iss, i) => [
         iss.id || `T${String(i+1).padStart(2,'0')}`,
         iss.severity || '', iss.category || '', iss.title || '',
-        iss.observation || '', iss.implication || '', iss.recommendation || '', '', '',
+        iss.observation || '',
+        iss.evidenceQuote || '',
+        iss.noteRef || '',
+        iss.implication || '', iss.recommendation || '', '', '',
       ]);
 
   issWS.addTable({
@@ -365,7 +368,10 @@ export async function exportExcel({ analysis, caro, reportFields }) {
     columns: [
       { name: 'Test ID', filterButton: true }, { name: 'Severity', filterButton: true },
       { name: 'Category', filterButton: true }, { name: 'Title', filterButton: false },
-      { name: 'Observation', filterButton: false }, { name: 'Implication', filterButton: false },
+      { name: 'Observation', filterButton: false },
+      { name: 'Evidence Quote', filterButton: false },
+      { name: 'Note Ref', filterButton: true },
+      { name: 'Implication', filterButton: false },
       { name: 'Recommendation', filterButton: false }, { name: 'Status', filterButton: true },
       { name: 'Reviewer Notes', filterButton: false },
     ],
@@ -380,8 +386,14 @@ export async function exportExcel({ analysis, caro, reportFields }) {
     issWS.getCell(r, 1).font = { name: 'Consolas', size: 10, bold: true, color: { argb: C.GREEN_DARK } };
     issWS.getCell(r, 4).font = { name: 'Calibri', size: 10, bold: true, color: { argb: C.GREEN_DARK } };
     issWS.getCell(r, 4).alignment = { vertical: 'top', wrapText: true };
-    [5,6,7,8,9].forEach((ci) => { issWS.getCell(r, ci).alignment = { vertical: 'top', wrapText: true }; });
-    issWS.getRow(r).height = 80;
+    // Evidence quote — italic, muted
+    issWS.getCell(r, 6).font = { name: 'Calibri', size: 10, italic: true, color: { argb: C.MUTED } };
+    issWS.getCell(r, 6).alignment = { vertical: 'top', wrapText: true };
+    // Note ref — mono, muted
+    issWS.getCell(r, 7).font = { name: 'Consolas', size: 10, color: { argb: C.MUTED } };
+    issWS.getCell(r, 7).alignment = { horizontal: 'center', vertical: 'top', wrapText: true };
+    [5,8,9,10,11].forEach((ci) => { issWS.getCell(r, ci).alignment = { vertical: 'top', wrapText: true }; });
+    issWS.getRow(r).height = 90;
   });
 
   // ================================================================

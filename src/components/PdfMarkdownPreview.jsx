@@ -1,15 +1,19 @@
 // ============ PDF MARKDOWN PREVIEW ============
 // Shows extracted text after pdfjs runs.
 // User can edit the markdown, re-extract, or proceed to analysis.
+// Also chooses the model and toggles whether CARO runs after Schedule III.
 
 import React, { useState, useRef } from 'react';
-import { FileText, Edit3, RefreshCw, Sparkles, AlertTriangle, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileText, Edit3, RefreshCw, Sparkles, AlertTriangle, Eye, ChevronDown, ChevronUp, ShieldCheck, Zap, Brain } from 'lucide-react';
 import { COLORS, FONTS, BTN_PRIMARY, BTN_GHOST } from '../styles/tokens.js';
 
 const APPROX_CHARS_PER_TOKEN = 4;
 
 export function PdfMarkdownPreview({
-  markdown, pdfMeta, onAnalyze, onReExtract, onMarkdownChange,
+  markdown, pdfMeta,
+  onAnalyze, onReExtract, onMarkdownChange,
+  selectedModel, onModelChange,
+  runCaro, onRunCaroChange,
 }) {
   const [editing, setEditing]       = useState(false);
   const [localMd, setLocalMd]       = useState(markdown);
@@ -170,23 +174,106 @@ export function PdfMarkdownPreview({
         </div>
       )}
 
-      {/* CTA */}
+      {/* CTA + per-run controls */}
       <div style={{ textAlign: 'center', marginTop: 28 }}>
-        <button
-          onClick={handleAnalyze}
-          disabled={!localMd.trim()}
-          style={{
-            ...BTN_PRIMARY, padding: '14px 36px', fontSize: 15,
-            opacity: localMd.trim() ? 1 : 0.4,
-            cursor: localMd.trim() ? 'pointer' : 'not-allowed',
-          }}
-        >
-          <Sparkles size={16} /> Analyse with DeepSeek
-        </button>
+
+        {/* Model segmented control */}
+        {selectedModel && onModelChange && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 10,
+            marginBottom: 16, fontSize: 12, color: COLORS.TEXT_MUTED,
+          }}>
+            <span style={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, fontSize: 10 }}>
+              Model
+            </span>
+            <div style={{
+              display: 'inline-flex',
+              border: `1px solid ${COLORS.BORDER_STRONG}`,
+              borderRadius: 999,
+              padding: 2,
+              background: COLORS.BG_CREAM,
+            }}>
+              <ModelPill
+                active={selectedModel === 'deepseek-v4-pro'}
+                onClick={() => onModelChange('deepseek-v4-pro')}
+                icon={Brain}
+                label="pro"
+                sublabel="deeper reasoning · ~45s"
+              />
+              <ModelPill
+                active={selectedModel === 'deepseek-v4-flash'}
+                onClick={() => onModelChange('deepseek-v4-flash')}
+                icon={Zap}
+                label="flash"
+                sublabel="faster · cheaper · ~25s"
+              />
+            </div>
+          </div>
+        )}
+
+        <div>
+          <button
+            onClick={handleAnalyze}
+            disabled={!localMd.trim()}
+            style={{
+              ...BTN_PRIMARY, padding: '14px 36px', fontSize: 15,
+              opacity: localMd.trim() ? 1 : 0.4,
+              cursor: localMd.trim() ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <Sparkles size={16} /> Analyse with DeepSeek
+          </button>
+        </div>
+
+        {/* CARO toggle */}
+        {onRunCaroChange && (
+          <label style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            marginTop: 14, fontSize: 13, color: COLORS.TEXT,
+            cursor: 'pointer', userSelect: 'none',
+          }}>
+            <input
+              type="checkbox"
+              checked={!!runCaro}
+              onChange={(e) => onRunCaroChange(e.target.checked)}
+              style={{ accentColor: COLORS.PRIMARY, cursor: 'pointer' }}
+            />
+            <ShieldCheck size={14} color={runCaro ? COLORS.PRIMARY : COLORS.TEXT_FAINT} />
+            <span>
+              Include <strong>CARO 2020</strong> evaluation after Schedule III review
+            </span>
+          </label>
+        )}
+
         <p style={{ marginTop: 8, fontSize: 11, color: COLORS.TEXT_FAINT }}>
-          Runs Schedule III review first, then CARO 2020 if applicable
+          {runCaro
+            ? 'Schedule III review will run first, followed by CARO 2020.'
+            : 'Schedule III only — you can run CARO from the results screen if needed.'}
         </p>
       </div>
     </div>
+  );
+}
+
+function ModelPill({ active, onClick, icon: Icon, label, sublabel }) {
+  return (
+    <button
+      onClick={onClick}
+      title={sublabel}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        padding: '6px 14px',
+        background: active ? COLORS.PRIMARY : 'transparent',
+        color:      active ? '#faf6ee'      : COLORS.TEXT_MUTED,
+        border: 'none',
+        borderRadius: 999,
+        fontSize: 12, fontWeight: 600, fontFamily: FONTS.BODY,
+        cursor: 'pointer',
+        transition: 'background 150ms, color 150ms',
+      }}
+    >
+      <Icon size={13} />
+      <span>{label}</span>
+    </button>
   );
 }
