@@ -180,8 +180,10 @@ export function ScheduleIIIReviewer() {
   const [ocrProgress, setOcrProgress] = useState(null);
 
   // ── Notes auto-drafter ──
-  const [draftedNotes,   setDraftedNotes]   = useState(null);   // null = not yet generated
+  const [draftedNotes,    setDraftedNotes]    = useState(null);   // null = not yet generated
   const [notesGenerating, setNotesGenerating] = useState(false);
+  const [notesProgress,   setNotesProgress]   = useState(null);   // { current, total } for batches
+  const notesAbortRef = useRef(null);
 
   // ── Engagement chat ──
   const [chatOpen,     setChatOpen]     = useState(false);
@@ -558,28 +560,69 @@ export function ScheduleIIIReviewer() {
     return isDisclosureType || looksMissing;
   });
 
+  // Batched notes drafting — splits the eligible-issues list into chunks so
+  // each DeepSeek call is fast and resilient. With ~6 issues per batch a
+  // typical run finishes in 30-50s per batch, with the user seeing progress
+  // and able to cancel at any time.
+  const NOTES_BATCH_SIZE = 6;
+
   const handleGenerateNotes = async () => {
     if (!analysis || notesGenerating) return;
     if (eligibleNotesIssues.length === 0) return;
-    setNotesGenerating(true);
+
     const ctrl = new AbortController();
+    notesAbortRef.current = ctrl;
+
+    setNotesGenerating(true);
+    setDraftedNotes(null);
+
+    // Split into batches of NOTES_BATCH_SIZE
+    const batches = [];
+    for (let i = 0; i < eligibleNotesIssues.length; i += NOTES_BATCH_SIZE) {
+      batches.push(eligibleNotesIssues.slice(i, i + NOTES_BATCH_SIZE));
+    }
+    setNotesProgress({ current: 0, total: batches.length });
+
+    const allDrafts = [];
     try {
-      const drafts = await callDeepSeek({
-        apiKey,
-        model:        selectedModel,
-        systemPrompt: 'You are a senior Indian Chartered Accountant drafting Schedule III–compliant Notes to the Financial Statements. Use the canonical wording, paragraph references, and tabular structures used in published audited Indian financial statements. Where company-specific figures are unknown, use placeholder [XX] for the preparer to fill in.',
-        userPrompt:   NOTES_DRAFT_PROMPT(eligibleNotesIssues, analysis.company, analysis.keyMetrics),
-        signal:       ctrl.signal,
-        temperature:  0.1,
-        top_p:        0.2,
-      });
-      setDraftedNotes(Array.isArray(drafts?.draftedNotes) ? drafts.draftedNotes : []);
+      for (let bi = 0; bi < batches.length; bi++) {
+        if (ctrl.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+        setNotesProgress({ current: bi, total: batches.length });
+        const batch = batches[bi];
+        const result = await callDeepSeek({
+          apiKey,
+          model:        selectedModel,
+          systemPrompt: 'You are a senior Indian Chartered Accountant drafting Schedule III–compliant Notes to the Financial Statements. Use the canonical wording, paragraph references, and tabular structures used in published audited Indian financial statements. Where company-specific figures are unknown, use placeholder [XX] for the preparer to fill in.',
+          userPrompt:   NOTES_DRAFT_PROMPT(batch, analysis.company, analysis.keyMetrics),
+          signal:       ctrl.signal,
+          temperature:  0.1,
+          top_p:        0.2,
+        });
+        const drafts = Array.isArray(result?.draftedNotes) ? result.draftedNotes : [];
+        allDrafts.push(...drafts);
+        // Update the visible list incrementally so the user sees progress.
+        setDraftedNotes([...allDrafts]);
+      }
+      setNotesProgress({ current: batches.length, total: batches.length });
     } catch (err) {
-      console.error('Note drafting failed:', err);
-      alert('Note drafting failed: ' + (err.message || 'Unknown error'));
+      if (err.name === 'AbortError') {
+        // Keep whatever drafts we got — surface a soft message in the tab.
+        if (allDrafts.length === 0) setDraftedNotes(null);
+        console.warn('Note drafting cancelled.');
+      } else {
+        console.error('Note drafting failed:', err);
+        alert('Note drafting failed: ' + (err.message || 'Unknown error') + (allDrafts.length > 0 ? `\n\n${allDrafts.length} notes were drafted before the failure — they remain visible.` : ''));
+        if (allDrafts.length === 0) setDraftedNotes(null);
+      }
     } finally {
       setNotesGenerating(false);
+      setNotesProgress(null);
+      notesAbortRef.current = null;
     }
+  };
+
+  const handleCancelNotes = () => {
+    notesAbortRef.current?.abort();
   };
 
   const handleDownloadNotesWord = () => {
@@ -1006,7 +1049,9 @@ INSTRUCTIONS
               <SuggestedNotesTab
                 draftedNotes={draftedNotes}
                 generating={notesGenerating}
+                progress={notesProgress}
                 onGenerate={handleGenerateNotes}
+                onCancel={handleCancelNotes}
                 onDownloadWord={handleDownloadNotesWord}
                 eligibleIssueCount={eligibleNotesIssues.length}
               />

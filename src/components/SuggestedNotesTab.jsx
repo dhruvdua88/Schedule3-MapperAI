@@ -4,11 +4,11 @@
 // pack as a Word document for the preparer.
 
 import React, { useState } from 'react';
-import { FileSignature, Copy, Check, Download, Loader2, FilePlus2, AlertCircle } from 'lucide-react';
+import { FileSignature, Copy, Check, Download, Loader2, FilePlus2, AlertCircle, X } from 'lucide-react';
 import { COLORS, FONTS, BTN_PRIMARY, BTN_GHOST } from '../styles/tokens.js';
 
 export function SuggestedNotesTab({
-  draftedNotes, generating, onGenerate, onDownloadWord, eligibleIssueCount,
+  draftedNotes, generating, progress, onGenerate, onCancel, onDownloadWord, eligibleIssueCount,
 }) {
   const [copiedId, setCopiedId] = useState(null);
 
@@ -45,26 +45,25 @@ export function SuggestedNotesTab({
               ? `${eligibleIssueCount} disclosure-missing issue${eligibleIssueCount === 1 ? '' : 's'} from this engagement can be auto-drafted into Schedule III-compliant note text. The preparer can paste these directly into the financial statements.`
               : 'No disclosure-missing issues were flagged in this engagement, so there is nothing to draft.'}
           </p>
-          {eligibleIssueCount > 0 && (
+          {eligibleIssueCount > 0 && !generating && (
             <button
               onClick={onGenerate}
-              disabled={generating}
               style={{
                 ...BTN_PRIMARY,
                 padding: '12px 26px', fontSize: 14,
-                opacity: generating ? 0.6 : 1,
-                cursor: generating ? 'wait' : 'pointer',
               }}
             >
-              {generating
-                ? <><Loader2 size={15} className="spin" /> Drafting notes…</>
-                : <><FileSignature size={15} /> Draft suggested notes</>
-              }
+              <FileSignature size={15} /> Draft suggested notes
             </button>
           )}
-          <p style={{ marginTop: 12, fontSize: 11, color: COLORS.TEXT_FAINT }}>
-            Uses DeepSeek with the same model selected for this engagement. Typically ~25 seconds.
-          </p>
+          {generating && (
+            <GeneratingBlock progress={progress} onCancel={onCancel} eligibleIssueCount={eligibleIssueCount} />
+          )}
+          {!generating && (
+            <p style={{ marginTop: 12, fontSize: 11, color: COLORS.TEXT_FAINT }}>
+              Drafting is batched into chunks of 6 issues. Typically ~30 seconds per batch. You can cancel any time.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -85,14 +84,22 @@ export function SuggestedNotesTab({
             Schedule III–compliant wording. Placeholders like [XX] are for company-specific figures.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={onGenerate} disabled={generating} style={{ ...BTN_GHOST, fontSize: 12 }}>
-            {generating
-              ? <><Loader2 size={13} className="spin" /> Re-drafting…</>
-              : <><FileSignature size={13} /> Re-draft</>
-            }
-          </button>
-          <button onClick={onDownloadWord} style={{ ...BTN_PRIMARY, fontSize: 13 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {generating && progress && (
+            <span style={{ fontSize: 11, color: COLORS.TEXT_MUTED, marginRight: 4 }}>
+              Batch {Math.min(progress.current + 1, progress.total)} of {progress.total}…
+            </span>
+          )}
+          {generating ? (
+            <button onClick={onCancel} style={{ ...BTN_GHOST, fontSize: 12, color: COLORS.CRIT, borderColor: COLORS.CRIT }}>
+              <X size={13} /> Cancel
+            </button>
+          ) : (
+            <button onClick={onGenerate} style={{ ...BTN_GHOST, fontSize: 12 }}>
+              <FileSignature size={13} /> Re-draft
+            </button>
+          )}
+          <button onClick={onDownloadWord} disabled={generating} style={{ ...BTN_PRIMARY, fontSize: 13, opacity: generating ? 0.6 : 1 }}>
             <Download size={14} /> Download as Word
           </button>
         </div>
@@ -158,6 +165,59 @@ export function SuggestedNotesTab({
         <div>
           <strong>Always review before issuing.</strong> Drafts are AI-generated suggestions in standard Schedule III wording — verify every figure, every reference, and every fact before adopting in the financial statements.
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Generating state: spinner, batch progress, and a Cancel button ──
+function GeneratingBlock({ progress, onCancel, eligibleIssueCount }) {
+  const current = progress?.current ?? 0;
+  const total   = progress?.total   ?? Math.max(1, Math.ceil((eligibleIssueCount || 0) / 6));
+  const pct     = total > 0 ? Math.round((current / total) * 100) : 0;
+
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 8,
+        background: COLORS.PRIMARY, color: '#faf6ee',
+        padding: '12px 24px', borderRadius: 8,
+        fontSize: 14, fontWeight: 500, fontFamily: FONTS.BODY,
+        opacity: 0.8,
+      }}>
+        <Loader2 size={15} className="spin" />
+        <span>Drafting batch {Math.min(current + 1, total)} of {total}…</span>
+      </div>
+
+      <div style={{ marginTop: 14, maxWidth: 360, marginLeft: 'auto', marginRight: 'auto' }}>
+        <div style={{
+          width: '100%', height: 6, borderRadius: 999,
+          background: COLORS.BORDER, overflow: 'hidden',
+        }}>
+          <div style={{
+            width: `${pct}%`, height: '100%', background: COLORS.PRIMARY,
+            borderRadius: 999, transition: 'width 300ms ease-out',
+          }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 11, color: COLORS.TEXT_MUTED }}>
+          <span>{eligibleIssueCount} issue{eligibleIssueCount === 1 ? '' : 's'} · ~30s per batch</span>
+          <span className="mono">{pct}%</span>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 14 }}>
+        <button
+          onClick={onCancel}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            background: 'transparent', color: COLORS.CRIT,
+            border: `1px solid ${COLORS.CRIT}`,
+            padding: '7px 16px', borderRadius: 6,
+            fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: FONTS.BODY,
+          }}
+        >
+          <X size={13} /> Cancel drafting
+        </button>
       </div>
     </div>
   );

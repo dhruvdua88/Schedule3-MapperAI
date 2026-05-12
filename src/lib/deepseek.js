@@ -87,6 +87,34 @@ function delay(ms, signal) {
 }
 
 /**
+ * Build a composite AbortSignal that aborts when EITHER the caller's signal
+ * aborts OR the timeout fires. Returns { signal, cancel } — call cancel() in
+ * the finally block to clear the timer.
+ */
+function withTimeout(callerSignal, timeoutMs) {
+  const ctrl = new AbortController();
+  let timer = null;
+  let timedOut = false;
+
+  if (callerSignal) {
+    if (callerSignal.aborted) ctrl.abort(callerSignal.reason);
+    else callerSignal.addEventListener('abort', () => ctrl.abort(callerSignal.reason), { once: true });
+  }
+  if (timeoutMs && timeoutMs > 0) {
+    timer = setTimeout(() => {
+      timedOut = true;
+      ctrl.abort(new DOMException(`Request timed out after ${Math.round(timeoutMs / 1000)}s`, 'TimeoutError'));
+    }, timeoutMs);
+  }
+
+  return {
+    signal: ctrl.signal,
+    cancel: () => { if (timer) clearTimeout(timer); },
+    didTimeOut: () => timedOut,
+  };
+}
+
+/**
  * Call the DeepSeek chat completions endpoint.
  *
  * @param {object} opts
@@ -205,49 +233,69 @@ export async function chatDeepSeek({
     stream: false,
   };
 
+  const guard = withTimeout(signal, TIMEOUT_MS);
   let response;
   try {
-    response = await fetch(`${BASE_URL}/chat/completions`, {
-      method:  'POST',
-      signal,
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload),
-    });
-  } catch (err) {
-    if (err.name === 'AbortError') throw err;
-    throw new ApiError(`Network error: ${err.message}.`);
-  }
+    try {
+      response = await fetch(`${BASE_URL}/chat/completions`, {
+        method:  'POST',
+        signal:  guard.signal,
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        if (guard.didTimeOut()) throw new ApiError(`Chat request timed out after ${Math.round(TIMEOUT_MS / 1000)}s.`, 408);
+        throw err;
+      }
+      throw new ApiError(`Network error: ${err.message}.`);
+    }
 
-  if (!response.ok) {
-    const errText = await response.text().catch(() => '');
-    if (response.status === 401 || response.status === 403)
-      throw new AuthError('Invalid or expired API key. Please check your DeepSeek API key in Settings.');
-    if (response.status === 429)
-      throw new RateLimitError('DeepSeek rate limit reached. Please wait a moment and try again.');
-    throw new ApiError(`DeepSeek error ${response.status}: ${errText.slice(0, 200)}`, response.status);
-  }
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      if (response.status === 401 || response.status === 403)
+        throw new AuthError('Invalid or expired API key. Please check your DeepSeek API key in Settings.');
+      if (response.status === 429)
+        throw new RateLimitError('DeepSeek rate limit reached. Please wait a moment and try again.');
+      throw new ApiError(`DeepSeek error ${response.status}: ${errText.slice(0, 200)}`, response.status);
+    }
 
-  const data = await response.json();
-  if (onUsage && data.usage) {
-    onUsage({
-      input_tokens:  data.usage.prompt_tokens     || 0,
-      output_tokens: data.usage.completion_tokens || 0,
-    });
+    const data = await response.json();
+    if (onUsage && data.usage) {
+      onUsage({
+        input_tokens:  data.usage.prompt_tokens     || 0,
+        output_tokens: data.usage.completion_tokens || 0,
+      });
+    }
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) {
+      // eslint-disable-next-line no-console
+      console.error('[deepseek/chat] empty content:', data);
+      throw new ApiError('Empty chat response. See console for the raw payload.');
+    }
+    return content;
+  } finally {
+    guard.cancel();
   }
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) {
-    // eslint-disable-next-line no-console
-    console.error('[deepseek/chat] empty content:', data);
-    throw new ApiError('Empty chat response. See console for the raw payload.');
-  }
-  return content;
 }
 
 // ============================================================
 // Internal — single attempt at the API call
 // ============================================================
-async function _doCall({
-  apiKey, model, systemPrompt, userPrompt, signal,
+async function _doCall(opts) {
+  // Wrap caller signal with our own timeout — fetch will abort cleanly
+  // after TIMEOUT_MS even if the caller forgot to pass a signal. The
+  // inner function takes the guarded signal directly.
+  const guard = withTimeout(opts.signal, TIMEOUT_MS);
+  try {
+    return await _doCallInner({ ...opts, signal: guard.signal, didTimeOut: guard.didTimeOut });
+  } finally {
+    guard.cancel();
+  }
+}
+
+async function _doCallInner({
+  apiKey, model, systemPrompt, userPrompt, signal, didTimeOut,
   onUsage, onFirstToken, temperature, top_p, useStreaming,
 }) {
   let response;
@@ -274,7 +322,13 @@ async function _doCall({
       }),
     });
   } catch (err) {
-    if (err.name === 'AbortError') throw err;
+    if (err.name === 'AbortError') {
+      // Distinguish "we timed out" from "user cancelled" so retry can fire.
+      if (didTimeOut && didTimeOut()) {
+        throw new ApiError(`DeepSeek request timed out after ${Math.round(TIMEOUT_MS / 1000)}s.`, 408);
+      }
+      throw err;
+    }
     throw new ApiError(`Network error: ${err.message}. Check your internet connection.`);
   }
 
@@ -318,7 +372,15 @@ async function _doCall({
     let usage = null;
 
     while (true) {
-      const { value, done } = await reader.read();
+      let value, done;
+      try {
+        ({ value, done } = await reader.read());
+      } catch (err) {
+        if (err.name === 'AbortError' && didTimeOut && didTimeOut()) {
+          throw new ApiError(`DeepSeek stream timed out after ${Math.round(TIMEOUT_MS / 1000)}s.`, 408);
+        }
+        throw err;
+      }
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
 
