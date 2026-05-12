@@ -97,8 +97,11 @@ function delay(ms, signal) {
  * @param {AbortSignal} [opts.signal]  - AbortController signal for cancellation
  * @param {function} [opts.onUsage]    - Called with {input_tokens, output_tokens} after response
  * @param {function} [opts.onFirstToken] - Called once when the first content chunk arrives.
- *                                         If provided, the call switches to streaming mode (SSE).
- *                                         The final parsed JSON is still returned from the promise.
+ *                                         ONLY fires when `stream: true` is also set. Ignored
+ *                                         otherwise (default path is non-streaming).
+ * @param {boolean}  [opts.stream]     - Explicitly opt into SSE streaming. Default false.
+ *                                         (Streaming + json_object on DeepSeek is fiddly — keep
+ *                                          it off unless you've tested the specific model + endpoint.)
  * @param {number}   [opts.temperature] - Sampling temperature (default: 0.0).
  * @param {number}   [opts.top_p]      - Nucleus sampling cutoff (default: 0.1).
  * @param {boolean}  [opts.bypassCache] - Skip cache lookup and store (default: false).
@@ -112,13 +115,15 @@ export async function callDeepSeek({
   signal,
   onUsage,
   onFirstToken,
+  stream      = false,
   temperature = 0.0,
   top_p       = 0.1,
   bypassCache = false,
 }) {
   if (!apiKey) throw new AuthError('No API key provided. Please add your DeepSeek API key in Settings.');
 
-  const useStreaming = typeof onFirstToken === 'function';
+  // Streaming is now explicit-opt-in. onFirstToken alone no longer triggers it.
+  const useStreaming = !!stream;
 
   // ── Cache check (non-streaming only; streaming consumers want live feedback) ──
   let cacheKey = null;
@@ -292,9 +297,38 @@ async function _doCall({
     }
 
     content = data.choices?.[0]?.message?.content;
+
+    // When content is empty, log the full response to console so we can debug
+    // edge cases (content filter / refusal / odd model names / etc.).
+    if (!content) {
+      const finishReason = data.choices?.[0]?.finish_reason;
+      const refusal      = data.choices?.[0]?.message?.refusal;
+      // eslint-disable-next-line no-console
+      console.error('[deepseek] empty content in response:', {
+        finishReason,
+        refusal,
+        model:  data.model,
+        usage:  data.usage,
+        firstChoice: data.choices?.[0],
+      });
+      if (refusal) {
+        throw new ApiError(`Model refused to answer: ${String(refusal).slice(0, 200)}`);
+      }
+      if (finishReason === 'content_filter') {
+        throw new ApiError('DeepSeek content filter blocked the response. Try a different document or contact DeepSeek support.');
+      }
+      if (finishReason === 'length') {
+        throw new ApiError('Response was truncated before any content was emitted. The prompt may be too long. Try the flash model or reduce the PDF size.');
+      }
+    }
   }
 
-  if (!content) throw new ApiError('Empty response from DeepSeek API');
+  if (!content) {
+    throw new ApiError(
+      'Empty response from DeepSeek API. ' +
+      'See the browser console for the raw response payload — common causes are an invalid model name (verify deepseek-v4-pro / deepseek-v4-flash exist on your DeepSeek plan), or a temporary upstream issue (auto-retry should have kicked in for 5xx errors).'
+    );
+  }
 
   // response_format: json_object should guarantee valid JSON, but handle edge cases
   try {
