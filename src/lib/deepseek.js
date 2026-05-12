@@ -176,6 +176,74 @@ export async function callDeepSeek({
 }
 
 // ============================================================
+// Chat call — multi-turn, NO json_object response_format.
+// Used by EngagementChat for free-form follow-up questions.
+// Returns the assistant's reply text (plain string).
+// ============================================================
+export async function chatDeepSeek({
+  apiKey,
+  model = DEFAULT_MODEL,
+  systemPrompt,
+  messages,           // [{role:'user'|'assistant', content:'...'}, ...]
+  signal,
+  temperature = 0.3,  // slightly higher than the audit calls — more conversational
+  top_p       = 0.9,
+  onUsage,
+}) {
+  if (!apiKey)   throw new AuthError('No API key provided. Please add your DeepSeek API key in Settings.');
+  if (!messages) throw new ApiError('chatDeepSeek requires a messages array.');
+
+  const payload = {
+    model,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      ...messages,
+    ],
+    temperature,
+    top_p,
+    max_tokens: 4000,
+    stream: false,
+  };
+
+  let response;
+  try {
+    response = await fetch(`${BASE_URL}/chat/completions`, {
+      method:  'POST',
+      signal,
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') throw err;
+    throw new ApiError(`Network error: ${err.message}.`);
+  }
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    if (response.status === 401 || response.status === 403)
+      throw new AuthError('Invalid or expired API key. Please check your DeepSeek API key in Settings.');
+    if (response.status === 429)
+      throw new RateLimitError('DeepSeek rate limit reached. Please wait a moment and try again.');
+    throw new ApiError(`DeepSeek error ${response.status}: ${errText.slice(0, 200)}`, response.status);
+  }
+
+  const data = await response.json();
+  if (onUsage && data.usage) {
+    onUsage({
+      input_tokens:  data.usage.prompt_tokens     || 0,
+      output_tokens: data.usage.completion_tokens || 0,
+    });
+  }
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) {
+    // eslint-disable-next-line no-console
+    console.error('[deepseek/chat] empty content:', data);
+    throw new ApiError('Empty chat response. See console for the raw payload.');
+  }
+  return content;
+}
+
+// ============================================================
 // Internal — single attempt at the API call
 // ============================================================
 async function _doCall({

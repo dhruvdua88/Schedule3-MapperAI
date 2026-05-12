@@ -4,7 +4,7 @@
 // Also chooses the model and toggles whether CARO runs after Schedule III.
 
 import React, { useState, useRef } from 'react';
-import { FileText, Edit3, RefreshCw, Sparkles, AlertTriangle, Eye, ChevronDown, ChevronUp, ShieldCheck, Zap, Brain } from 'lucide-react';
+import { FileText, Edit3, RefreshCw, Sparkles, AlertTriangle, Eye, ChevronDown, ChevronUp, ShieldCheck, Zap, Brain, ScanLine, Loader2 } from 'lucide-react';
 import { COLORS, FONTS, BTN_PRIMARY, BTN_GHOST } from '../styles/tokens.js';
 
 const APPROX_CHARS_PER_TOKEN = 4;
@@ -14,6 +14,7 @@ export function PdfMarkdownPreview({
   onAnalyze, onReExtract, onMarkdownChange,
   selectedModel, onModelChange,
   runCaro, onRunCaroChange,
+  onRunOCR, ocrRunning, ocrProgress,
 }) {
   const [editing, setEditing]       = useState(false);
   const [localMd, setLocalMd]       = useState(markdown);
@@ -79,18 +80,58 @@ export function PdfMarkdownPreview({
         </div>
       </div>
 
-      {/* Scanned PDF warning */}
+      {/* Scanned PDF warning + OCR option */}
       {isScanned && (
         <div style={{
-          display: 'flex', gap: 10, alignItems: 'flex-start',
           background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8,
-          padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#92400e',
+          padding: '14px 16px', marginBottom: 16, fontSize: 13, color: '#92400e',
         }}>
-          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-          <div>
-            <strong>Scanned PDF detected.</strong> Very few text items were found — the document may be image-based.
-            Analysis quality will be low. Consider using a text-based PDF or manually paste the balance sheet text below.
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: onRunOCR ? 12 : 0 }}>
+            <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <strong>Scanned PDF detected.</strong> Very few text items were found — the document is likely image-based.
+              Analysis quality will be very low unless OCR is run first.
+            </div>
           </div>
+          {onRunOCR && (
+            <div style={{
+              display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
+              borderTop: '1px solid #fcd34d', paddingTop: 12,
+            }}>
+              <button
+                onClick={onRunOCR}
+                disabled={ocrRunning}
+                style={{
+                  ...BTN_PRIMARY,
+                  background: '#92400e',
+                  padding: '8px 16px', fontSize: 13,
+                  opacity: ocrRunning ? 0.7 : 1,
+                  cursor: ocrRunning ? 'wait' : 'pointer',
+                }}
+              >
+                {ocrRunning
+                  ? <><Loader2 size={14} className="spin" /> Running OCR…</>
+                  : <><ScanLine size={14} /> Run OCR on this PDF</>
+                }
+              </button>
+              {ocrRunning && ocrProgress && (
+                <span style={{ fontSize: 12, color: '#92400e' }}>
+                  {ocrProgress.status}
+                  {ocrProgress.current && ocrProgress.total
+                    ? ` (page ${ocrProgress.current} of ${ocrProgress.total})`
+                    : ''}
+                  {typeof ocrProgress.progress === 'number'
+                    ? ` · ${Math.round(ocrProgress.progress * 100)}%`
+                    : ''}
+                </span>
+              )}
+              {!ocrRunning && (
+                <span style={{ fontSize: 11, color: '#92400e', opacity: 0.85 }}>
+                  Uses Tesseract.js loaded from CDN. Typically 3–8 seconds per page.
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -6,16 +6,17 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  Layers, ShieldCheck, Hash, FileSignature, XCircle, RotateCcw, Building2,
+  Layers, ShieldCheck, Hash, FileSignature, XCircle, RotateCcw, Building2, FilePlus2,
 } from 'lucide-react';
 
 import { COLORS, FONTS, SEVERITY, BTN_PRIMARY } from '../styles/tokens.js';
-import { SCH3_PROMPT, CARO_PROMPT }              from '../data/prompts.js';
+import { SCH3_PROMPT, CARO_PROMPT, NOTES_DRAFT_PROMPT } from '../data/prompts.js';
 import { STANDARD_CARO_REMARKS }                 from '../data/caroRemarks.js';
 import { DEFAULT_REPORT_FIELDS }                 from '../data/reportDefaults.js';
 import { extractPdfToMarkdown }                  from '../lib/pdfExtract.js';
-import { callDeepSeek, AuthError, RateLimitError, ApiError } from '../lib/deepseek.js';
-import { generateReport, downloadAsWord }         from '../lib/docExport.js';
+import { ocrPdfToMarkdown }                      from '../lib/ocrPdf.js';
+import { callDeepSeek, chatDeepSeek, AuthError, RateLimitError, ApiError } from '../lib/deepseek.js';
+import { generateReport, downloadAsWord, downloadSuggestedNotesWord } from '../lib/docExport.js';
 import { exportExcel }                           from '../lib/excelExport.js';
 import { fmtLakhs }                              from '../lib/format.js';
 import {
@@ -24,6 +25,8 @@ import {
 } from '../lib/engagementStore.js';
 import { computeCaroApplicability, synthesiseExemptCaroResult } from '../lib/caroApplicability.js';
 import { sanitiseSch3Response } from '../lib/sch3Sanitise.js';
+import { anchorIssuesToPages } from '../lib/sourceAnchor.js';
+import { SourceModal } from './SourceModal.jsx';
 
 import { SettingsGate }          from './SettingsGate.jsx';
 import { SettingsPanel }         from './SettingsPanel.jsx';
@@ -36,6 +39,8 @@ import { IssueCard }             from './IssueCard.jsx';
 import { CaroApplicabilityView } from './CaroApplicabilityView.jsx';
 import { ClauseRow }             from './ClauseRow.jsx';
 import { AuditReportTab }        from './AuditReportTab.jsx';
+import { SuggestedNotesTab }     from './SuggestedNotesTab.jsx';
+import { ChatLauncher, EngagementChat, CHAT_MAX_TURNS } from './EngagementChat.jsx';
 
 // ── CompanyHeader ────────────────────────────────────────────────────────────
 function Metric({ label, value, alert }) {
@@ -163,7 +168,24 @@ export function ScheduleIIIReviewer() {
   const [phase,        setPhase]        = useState('upload');
   const [markdown,     setMarkdown]     = useState('');
   const [pdfMeta,      setPdfMeta]      = useState(null);
+  const [pdfPages,     setPdfPages]     = useState([]);  // [{pageNum, text}] for source anchoring
   const [extractError, setExtractError] = useState('');
+
+  // ── Source modal (issue → page click-through) ──
+  const [sourceModalIssue, setSourceModalIssue] = useState(null);
+
+  // ── OCR (for scanned PDFs) ──
+  const [ocrRunning,  setOcrRunning]  = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(null);
+
+  // ── Notes auto-drafter ──
+  const [draftedNotes,   setDraftedNotes]   = useState(null);   // null = not yet generated
+  const [notesGenerating, setNotesGenerating] = useState(false);
+
+  // ── Engagement chat ──
+  const [chatOpen,     setChatOpen]     = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatSending,  setChatSending]  = useState(false);
 
   // ── Analysis ──
   const [analysis,    setAnalysis]    = useState(null);
@@ -214,6 +236,11 @@ export function ScheduleIIIReviewer() {
         e.preventDefault();
         handleExportExcel();
       }
+      // Cmd/Ctrl+K toggles the engagement chat in the Done state
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k' && phase === 'done') {
+        e.preventDefault();
+        setChatOpen((v) => !v);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -257,6 +284,34 @@ export function ScheduleIIIReviewer() {
   // ════════════════════════════════════════════════════
   // EXTRACT → PREVIEW
   // ════════════════════════════════════════════════════
+  // OCR the currently-uploaded scanned PDF and replace the markdown / pages
+  // with the OCR output. Stays in preview phase throughout.
+  const runOCR = async () => {
+    if (!file || ocrRunning) return;
+    setOcrRunning(true);
+    setOcrProgress({ phase: 'ocr-init', status: 'Initialising OCR engine…' });
+    try {
+      const buf = await file.arrayBuffer();
+      const result = await ocrPdfToMarkdown(buf, {
+        onProgress: (p) => setOcrProgress(p),
+      });
+      setMarkdown(result.markdown);
+      setPdfMeta({
+        pageCount:    result.pageCount,
+        charCount:    result.charCount,
+        looksScanned: false,
+        ocrApplied:   true,
+      });
+      setPdfPages(result.pages || []);
+    } catch (err) {
+      console.error('OCR failed:', err);
+      alert('OCR failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setOcrRunning(false);
+      setOcrProgress(null);
+    }
+  };
+
   const runExtract = async (f = file) => {
     if (!f) return;
     setPhase('extracting');
@@ -270,6 +325,7 @@ export function ScheduleIIIReviewer() {
       });
       setMarkdown(result.markdown);
       setPdfMeta({ pageCount: result.pageCount, charCount: result.charCount, looksScanned: result.looksScanned });
+      setPdfPages(result.pages || []);
       setPhase('preview');
     } catch (err) {
       console.error('PDF extract failed:', err);
@@ -369,8 +425,9 @@ export function ScheduleIIIReviewer() {
         onUsage:      (u) => setTokenUsage((prev) => ({ ...prev, sch3: u })),
         onFirstToken: () => setFirstTokenReceivedAt(Date.now()),
       });
-      // Sanity-filter the response — drop issues without evidence
-      const sch3 = sanitiseSch3Response(rawSch3);
+      // Sanity-filter the response, then stamp each issue with its source page.
+      const sanitised = sanitiseSch3Response(rawSch3);
+      const sch3 = anchorIssuesToPages(sanitised, pdfPages);
       setAnalysis(sch3);
 
       // ── Phase 2: CARO (optional) ───────────────────────────────────────
@@ -477,6 +534,123 @@ export function ScheduleIIIReviewer() {
     }
   };
 
+  // Filter issues to those that look like missing-disclosure findings — these
+  // are what the auto-drafter can write a note for. Computational / arithmetic
+  // / classification issues are skipped (the prompt would have to invent context).
+  const eligibleNotesIssues = (analysis?.scheduleIIIIssues || []).filter((iss) => {
+    if (!iss) return false;
+    if (iss.severity === 'LOW') return false;
+    const cat = (iss.category || '').toLowerCase();
+    const obs = (iss.observation || '').toLowerCase();
+    const evq = (iss.evidenceQuote || '').toLowerCase();
+    const isDisclosureType  = cat.includes('disclosure');
+    const looksMissing      = /missing|not\s+(provided|disclosed|located|present|given|made)|absent|omitted/i.test(obs)
+                              || /not\s+(located|provided|present|disclosed)/i.test(evq);
+    return isDisclosureType || looksMissing;
+  });
+
+  const handleGenerateNotes = async () => {
+    if (!analysis || notesGenerating) return;
+    if (eligibleNotesIssues.length === 0) return;
+    setNotesGenerating(true);
+    const ctrl = new AbortController();
+    try {
+      const drafts = await callDeepSeek({
+        apiKey,
+        model:        selectedModel,
+        systemPrompt: 'You are a senior Indian Chartered Accountant drafting Schedule III–compliant Notes to the Financial Statements. Use the canonical wording, paragraph references, and tabular structures used in published audited Indian financial statements. Where company-specific figures are unknown, use placeholder [XX] for the preparer to fill in.',
+        userPrompt:   NOTES_DRAFT_PROMPT(eligibleNotesIssues, analysis.company, analysis.keyMetrics),
+        signal:       ctrl.signal,
+        temperature:  0.1,
+        top_p:        0.2,
+      });
+      setDraftedNotes(Array.isArray(drafts?.draftedNotes) ? drafts.draftedNotes : []);
+    } catch (err) {
+      console.error('Note drafting failed:', err);
+      alert('Note drafting failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setNotesGenerating(false);
+    }
+  };
+
+  const handleDownloadNotesWord = () => {
+    if (!draftedNotes || draftedNotes.length === 0) return;
+    downloadSuggestedNotesWord(draftedNotes, analysis?.company, reportFields);
+  };
+
+  // Build the chat system prompt — packs the engagement context so the model
+  // can answer with specific facts rather than generic Schedule III boilerplate.
+  const buildChatSystemPrompt = () => {
+    if (!analysis) return 'You are a senior Indian Chartered Accountant.';
+    const co = analysis.company || {};
+    const m  = analysis.keyMetrics || {};
+    const issuesBrief = (analysis.scheduleIIIIssues || []).slice(0, 40).map(
+      (i) => `- [${i.id || '—'}] ${i.severity}: ${i.title} — ${i.observation?.slice(0, 200)}`
+    ).join('\n');
+    const caroBrief = caro?.applicability
+      ? (caro.applicability.applies
+          ? `CARO 2020 applies. ${caro.clauses?.filter(c => c.needsReview).length || 0} clause(s) flagged for review.`
+          : `CARO 2020 does not apply. Reason: ${caro.applicability.reasoning}`)
+      : 'CARO 2020 not evaluated for this engagement.';
+    return `You are a senior Indian Chartered Accountant answering follow-up questions on a specific audit engagement. Be precise, cite test IDs when relevant, quote rupee figures from the engagement context where available, and decline to fabricate facts that are not in the context.
+
+ENGAGEMENT CONTEXT
+==================
+Company: ${co.name || '—'} (CIN: ${co.cin || '—'}, FY ending ${co.yearEnd || '—'}, nature: ${co.natureOfBusiness || '—'})
+First reporting year: ${co.isFirstYear ? 'Yes' : 'No'}
+
+Key metrics (Rs in lakhs):
+- Revenue: ${(m.revenueLakhs ?? 0).toFixed(2)} | PBT: ${(m.profitBeforeTaxLakhs ?? 0).toFixed(2)} | PAT: ${(m.profitAfterTaxLakhs ?? 0).toFixed(2)}
+- Current tax: ${(m.currentTaxLakhs ?? 0).toFixed(2)} | Advance tax: ${(m.advanceTaxLakhs ?? 0).toFixed(2)}
+- Paid-up capital: ${(m.paidUpCapitalLakhs ?? 0).toFixed(2)} | Reserves: ${(m.reservesLakhs ?? 0).toFixed(2)}
+- Total borrowings: ${(m.totalBorrowingsLakhs ?? 0).toFixed(2)} | Total assets: ${(m.totalAssetsLakhs ?? 0).toFixed(2)}
+- Trade receivables: ${(m.tradeReceivablesLakhs ?? 0).toFixed(2)} | PPE: ${(m.fixedAssetsLakhs ?? 0).toFixed(2)}
+
+SCHEDULE III ISSUES FLAGGED (up to 40 shown):
+${issuesBrief || 'None.'}
+
+CARO 2020: ${caroBrief}
+
+INSTRUCTIONS
+============
+- When the user asks "why was test X flagged?", quote the actual observation from the context.
+- If asked to draft text (note, review memo, qualification language), produce ready-to-paste prose in standard Indian audit / Schedule III style.
+- If the user asks about a fact not in the context, say so explicitly rather than inventing.
+- Keep responses focused and concise unless the user asks for detail.`;
+  };
+
+  const sendChatMessage = async (text) => {
+    if (!analysis || chatSending) return;
+    const userMsg = { role: 'user', content: text };
+    const nextMessages = [...chatMessages, userMsg];
+    setChatMessages(nextMessages);
+    setChatSending(true);
+    try {
+      // Trim history to last MAX_TURNS messages (keeps cost bounded for long chats)
+      const trimmed = nextMessages.slice(-CHAT_MAX_TURNS * 2);
+      const reply = await chatDeepSeek({
+        apiKey,
+        model:        selectedModel,
+        systemPrompt: buildChatSystemPrompt(),
+        messages:     trimmed,
+      });
+      setChatMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
+    } catch (err) {
+      console.error('Chat failed:', err);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: '⚠️ ' + (err instanceof AuthError
+            ? 'Invalid API key. Check Settings.'
+            : err.message || 'Could not get a response.'),
+        },
+      ]);
+    } finally {
+      setChatSending(false);
+    }
+  };
+
   const handleGenerateWord = () => {
     if (!analysis) return;
     const ifcofrApplies = (analysis.keyMetrics?.revenueLakhs || 0) >= 5000;
@@ -527,7 +701,10 @@ export function ScheduleIIIReviewer() {
   // RESET
   // ════════════════════════════════════════════════════
   const handleReset = () => {
-    setFile(null); setMarkdown(''); setPdfMeta(null);
+    setFile(null); setMarkdown(''); setPdfMeta(null); setPdfPages([]);
+    setSourceModalIssue(null);
+    setDraftedNotes(null); setNotesGenerating(false);
+    setChatOpen(false); setChatMessages([]); setChatSending(false);
     setAnalysis(null); setCaro(null);
     setPhase('upload');
     setFileError(''); setExtractError(''); setAnalysisError('');
@@ -650,6 +827,9 @@ export function ScheduleIIIReviewer() {
             onModelChange={setSelectedModel}
             runCaro={runCaro}
             onRunCaroChange={setRunCaro}
+            onRunOCR={runOCR}
+            ocrRunning={ocrRunning}
+            ocrProgress={ocrProgress}
           />
         )}
 
@@ -713,6 +893,15 @@ export function ScheduleIIIReviewer() {
                   <Hash size={14} /> CARO Clauses
                 </TabBtn>
               )}
+              {eligibleNotesIssues.length > 0 && (
+                <TabBtn
+                  active={tab === 'suggested-notes'}
+                  onClick={() => setTab('suggested-notes')}
+                  count={draftedNotes ? draftedNotes.length : undefined}
+                >
+                  <FilePlus2 size={14} /> Suggested Notes
+                </TabBtn>
+              )}
               <TabBtn active={tab === 'audit-report'} onClick={() => setTab('audit-report')}>
                 <FileSignature size={14} /> Audit Report
               </TabBtn>
@@ -732,7 +921,12 @@ export function ScheduleIIIReviewer() {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     {issuesSorted.map((iss, idx) => (
-                      <IssueCard key={iss.id || idx} issue={iss} index={idx + 1} />
+                      <IssueCard
+                        key={iss.id || idx}
+                        issue={iss}
+                        index={idx + 1}
+                        onViewSource={(it) => setSourceModalIssue(it)}
+                      />
                     ))}
                   </div>
                 )}
@@ -773,6 +967,17 @@ export function ScheduleIIIReviewer() {
               </div>
             )}
 
+            {/* Suggested Notes tab */}
+            {tab === 'suggested-notes' && (
+              <SuggestedNotesTab
+                draftedNotes={draftedNotes}
+                generating={notesGenerating}
+                onGenerate={handleGenerateNotes}
+                onDownloadWord={handleDownloadNotesWord}
+                eligibleIssueCount={eligibleNotesIssues.length}
+              />
+            )}
+
             {/* Audit report tab */}
             {tab === 'audit-report' && (
               <AuditReportTab
@@ -795,6 +1000,31 @@ export function ScheduleIIIReviewer() {
       }}>
         AI-assisted review · Always verify findings against the underlying records
       </footer>
+
+      {/* Source modal — appears on top of all content when an issue's
+          "View page" chip is clicked. pdfPages may be empty if the
+          engagement was imported rather than freshly analysed. */}
+      {sourceModalIssue && (
+        <SourceModal
+          issue={sourceModalIssue}
+          pages={pdfPages}
+          onClose={() => setSourceModalIssue(null)}
+        />
+      )}
+
+      {/* Engagement chat — floating launcher + side panel.
+          Only available in the Done state, when we have an analysis to discuss. */}
+      {phase === 'done' && analysis && !chatOpen && (
+        <ChatLauncher onOpen={() => setChatOpen(true)} />
+      )}
+      <EngagementChat
+        open={chatOpen && phase === 'done' && !!analysis}
+        onClose={() => setChatOpen(false)}
+        onSendMessage={sendChatMessage}
+        messages={chatMessages}
+        sending={chatSending}
+        companyName={analysis?.company?.name}
+      />
     </div>
   );
 }

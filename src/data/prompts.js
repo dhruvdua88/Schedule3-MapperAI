@@ -290,6 +290,62 @@ FINAL SELF-REVIEW PASS — perform before returning the JSON:
 - Return ONLY the JSON object.
 ════════════════════════════════════════════`;
 
+// ============================================================
+// NOTES_DRAFT_PROMPT — given a filtered list of Schedule III HIGH/MEDIUM
+// disclosure-missing issues, draft proper Schedule III-compliant note text
+// that the preparer can paste into the financial statements.
+// ============================================================
+export const NOTES_DRAFT_PROMPT = (issues, company, metrics) => {
+  const issueLines = issues.map((iss, idx) =>
+    `${idx + 1}. [${iss.id || '—'}] ${iss.title}\n` +
+    `   Observation: ${iss.observation}\n` +
+    (iss.noteRef ? `   Reference: ${iss.noteRef}\n` : '') +
+    (iss.recommendation ? `   Recommendation: ${iss.recommendation}\n` : '')
+  ).join('\n');
+
+  return `You are a senior Indian Chartered Accountant drafting Notes to the Financial Statements for ${company?.name || 'the Company'} (CIN: ${company?.cin || '—'}, FY ending ${company?.yearEnd || '—'}, nature: ${company?.natureOfBusiness || '—'}).
+
+CONTEXT — key financial metrics (Rs in lakhs):
+- Revenue from operations: ${(metrics?.revenueLakhs ?? 0).toFixed(2)}
+- Profit before tax: ${(metrics?.profitBeforeTaxLakhs ?? 0).toFixed(2)}
+- Total borrowings: ${(metrics?.totalBorrowingsLakhs ?? 0).toFixed(2)}
+- Paid-up capital: ${(metrics?.paidUpCapitalLakhs ?? 0).toFixed(2)}
+- Reserves & surplus: ${(metrics?.reservesLakhs ?? 0).toFixed(2)}
+- Trade receivables: ${(metrics?.tradeReceivablesLakhs ?? 0).toFixed(2)}
+- Fixed assets / PPE: ${(metrics?.fixedAssetsLakhs ?? 0).toFixed(2)}
+- Total assets: ${(metrics?.totalAssetsLakhs ?? 0).toFixed(2)}
+- Average net profit (3 yrs): ${(metrics?.averageNetProfit3YearsLakhs ?? 0).toFixed(2)}
+- Net worth: ${(metrics?.netWorthLakhs ?? 0).toFixed(2)}
+
+TASK — for each of the issues below, draft a complete Note to the Financial Statements in proper Schedule III Division I (AS basis) wording. Use Indian accounting and legal phrasing as found in published audited financial statements of comparable Indian companies. Where company-specific figures are unknown, use the placeholder [XX] and bold it so the preparer can fill in.
+
+ISSUES TO DRAFT NOTES FOR:
+${issueLines}
+
+DRAFTING RULES:
+- Use the standard Schedule III note title (e.g., "Disclosure under Section 22 of the Micro, Small and Medium Enterprises Development Act, 2006", "Trade Receivables — Ageing Schedule", "Ratios — Section 13 of General Instructions for Preparation of Balance Sheet").
+- Include both the qualitative narrative AND the tabular disclosure structure where applicable (use plain-text tables with pipe delimiters that the preparer can recreate in Word).
+- Include comparatives column for prior year — mark "(Previous year: Rs [XX] lakhs)" or similar.
+- For tabular disclosures (ageing schedules, ratios, etc.), provide the full table skeleton with headers and row labels — the preparer fills the cells.
+- Cite the exact paragraph reference inside the note text where helpful (e.g., "as required by paragraph 6(L)(xi) of the General Instructions for Preparation of Balance Sheet under Schedule III").
+- For affirmative-statement disclosures (no Benami proceedings, not a wilful defaulter, no crypto, no struck-off relationships), draft the affirmative statement, not a placeholder.
+- Use Rupees in lakhs / crores consistent with the company's other notes.
+
+Return ONLY valid JSON (no markdown, no commentary):
+
+{
+  "draftedNotes": [
+    {
+      "issueId":   "T18",
+      "noteTitle": "Trade Receivables — Ageing Schedule (Para 6(L)(xviii) of Sch III, Div I)",
+      "noteText":  "The ageing of Trade Receivables is set out below in accordance with paragraph 6(L)(xviii) of the General Instructions for Preparation of Balance Sheet:\\n\\n| Particulars | Less than 6 months | 6 months – 1 year | 1 – 2 years | 2 – 3 years | More than 3 years | Total |\\n|---|---|---|---|---|---|---|\\n| (i) Undisputed Trade Receivables — considered good | [XX] | [XX] | [XX] | [XX] | [XX] | [XX] |\\n| ...etc... |\\n\\nThere are no disputed receivables as at the year end. (Previous year: nil.)"
+    }
+  ]
+}
+
+Order the drafted notes by the same severity ordering as the issues. If an issue is not a disclosure-missing type (e.g., it is a computational error or classification dispute), skip it — do not invent a "note" for it. Use \\n for line breaks inside noteText.`;
+};
+
 // CARO_PROMPT is a function that embeds key metrics into the prompt.
 // Returns the full user prompt string for the CARO analysis call.
 export const CARO_PROMPT = (m, companyName, isFirstYear, natureOfBusiness) =>

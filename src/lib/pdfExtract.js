@@ -33,7 +33,9 @@ const SCANNED_THRESHOLD = 5;
  * @param {ArrayBuffer} arrayBuffer   - Raw PDF bytes
  * @param {object}      [opts]
  * @param {function}    [opts.onProgress]  - ({phase, current, total}) progress callback
- * @returns {Promise<{markdown, pageCount, charCount, looksScanned}>}
+ * @returns {Promise<{markdown, pageCount, charCount, looksScanned, pages}>}
+ *   - markdown: full document with "## Page N" separators (unchanged behaviour).
+ *   - pages:    Array<{pageNum, text}> — per-page plaintext for source-anchor matching.
  */
 export async function extractPdfToMarkdown(arrayBuffer, { onProgress } = {}) {
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
@@ -56,12 +58,16 @@ export async function extractPdfToMarkdown(arrayBuffer, { onProgress } = {}) {
     pageCount > 0 && totalTextItems / pageCount < SCANNED_THRESHOLD;
 
   let markdown = '';
+  // Per-page plaintext for source-anchor matching (no markdown formatting).
+  const pageTexts = [];
 
   for (const { pageNum, items } of pages) {
     markdown += `\n---\n## Page ${pageNum}\n\n`;
+    let pageBuf = '';
 
     if (items.length === 0) {
       markdown += '*[No text extracted — this page may be a scanned image]*\n';
+      pageTexts.push({ pageNum, text: '' });
       continue;
     }
 
@@ -85,9 +91,11 @@ export async function extractPdfToMarkdown(arrayBuffer, { onProgress } = {}) {
         if (inTable) {
           // End of table — emit separator row hint and blank line
           markdown += '\n';
+          pageBuf  += '\n';
           inTable = false;
         } else {
           markdown += '\n';
+          pageBuf  += '\n';
         }
       }
       prevRowY = rowY;
@@ -102,19 +110,23 @@ export async function extractPdfToMarkdown(arrayBuffer, { onProgress } = {}) {
         // Table row — emit pipe-delimited markdown table row
         const cells = splitTableCells(row);
         markdown += `| ${cells.join(' | ')} |\n`;
+        pageBuf  += cells.join('  ') + '\n';
         inTable = true;
       } else {
-        if (inTable) { markdown += '\n'; inTable = false; }
+        if (inTable) { markdown += '\n'; pageBuf += '\n'; inTable = false; }
 
         // Check if heading: font size > 1.3× median
         const rowFontSz = Math.max(...row.map((item) => Math.abs(item.transform[0])));
         if (rowFontSz > medianFontSz * 1.3 && rowText.length < 120) {
           markdown += `### ${rowText}\n`;
+          pageBuf  += rowText + '\n';
         } else {
           markdown += `${rowText}\n`;
+          pageBuf  += rowText + '\n';
         }
       }
     }
+    pageTexts.push({ pageNum, text: pageBuf.trim() });
   }
 
   const finalMarkdown = markdown.trim();
@@ -123,6 +135,7 @@ export async function extractPdfToMarkdown(arrayBuffer, { onProgress } = {}) {
     pageCount,
     charCount:   finalMarkdown.length,
     looksScanned,
+    pages:       pageTexts,
   };
 }
 

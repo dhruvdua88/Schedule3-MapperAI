@@ -2,8 +2,12 @@
 // Renders a single Schedule III finding with severity badge,
 // category, observation, evidence quote, note reference,
 // implication, and recommendation.
+//
+// When the issue has a sourcePage (anchored by sourceAnchor.js), a
+// "View source" chip is shown — clicking it opens the SourceModal.
 
 import React from 'react';
+import { FileText, ExternalLink } from 'lucide-react';
 import { SEVERITY, COLORS, FONTS } from '../styles/tokens.js';
 
 function IssueField({ label, body, last }) {
@@ -20,8 +24,8 @@ function IssueField({ label, body, last }) {
   );
 }
 
-function EvidenceField({ quote, noteRef }) {
-  if (!quote && !noteRef) return null;
+function EvidenceField({ quote, noteRef, sourcePage, onViewSource }) {
+  if (!quote && !noteRef && !sourcePage) return null;
   return (
     <div style={{
       marginBottom: 10,
@@ -32,7 +36,7 @@ function EvidenceField({ quote, noteRef }) {
     }}>
       <div style={{
         fontSize: 10, color: COLORS.TEXT_MUTED, textTransform: 'uppercase',
-        letterSpacing: '0.08em', marginBottom: 3, fontWeight: 600,
+        letterSpacing: '0.08em', marginBottom: 6, fontWeight: 600,
         display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
       }}>
         <span>Evidence</span>
@@ -51,6 +55,22 @@ function EvidenceField({ quote, noteRef }) {
             {noteRef}
           </span>
         )}
+        {sourcePage && (
+          <button
+            onClick={onViewSource}
+            title="Open the source page in the PDF preview"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              background: COLORS.PRIMARY, color: '#faf6ee',
+              border: 'none', padding: '2px 8px', borderRadius: 3,
+              fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
+              letterSpacing: '0.05em', cursor: 'pointer', fontFamily: FONTS.BODY,
+            }}
+          >
+            <FileText size={10} /> Page {sourcePage}
+            <ExternalLink size={9} />
+          </button>
+        )}
       </div>
       {quote && (
         <div style={{
@@ -66,7 +86,7 @@ function EvidenceField({ quote, noteRef }) {
   );
 }
 
-export function IssueCard({ issue, index }) {
+export function IssueCard({ issue, index, onViewSource }) {
   const cfg  = SEVERITY[issue.severity] || SEVERITY.MEDIUM;
   const Icon = cfg.icon;
 
@@ -112,7 +132,12 @@ export function IssueCard({ issue, index }) {
       </div>
 
       <IssueField label="Observation"    body={issue.observation} />
-      <EvidenceField quote={issue.evidenceQuote} noteRef={issue.noteRef} />
+      <EvidenceField
+        quote={issue.evidenceQuote}
+        noteRef={issue.noteRef}
+        sourcePage={issue.sourcePage}
+        onViewSource={() => onViewSource?.(issue)}
+      />
       <IssueField label="Implication"    body={issue.implication} />
       <IssueField label="Recommendation" body={issue.recommendation} last />
     </div>

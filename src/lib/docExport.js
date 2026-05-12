@@ -209,6 +209,99 @@ export function downloadAsWord(html, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// ============================================================
+// SUGGESTED NOTES — Word export
+// ============================================================
+// Builds a clean Word document with one heading per drafted note and
+// the noteText body. Newlines in noteText become <br/> and pipe-tables
+// are kept as monospace blocks (Word renders monospace tables passably).
+// ============================================================
+function escapeHtml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function noteBodyToHtml(noteText) {
+  if (!noteText) return '';
+  // Detect any pipe-table-ish blocks and render them in monospace verbatim;
+  // wrap everything else as paragraphs.
+  const lines = String(noteText).split(/\r?\n/);
+  let html = '';
+  let buf = [];
+  let inMono = false;
+
+  const flushBuf = () => {
+    if (buf.length === 0) return;
+    if (inMono) {
+      html += `<pre style="font-family:'Courier New',monospace;font-size:10pt;background:#f8f8f5;border:1px solid #e8e1d2;padding:8pt;white-space:pre-wrap;">${escapeHtml(buf.join('\n'))}</pre>`;
+    } else {
+      const paragraph = buf.join(' ').trim();
+      if (paragraph) html += `<p style="margin:6pt 0;text-align:justify;">${escapeHtml(paragraph)}</p>`;
+    }
+    buf = [];
+  };
+
+  for (const line of lines) {
+    const isTableLine = /^\s*\|/.test(line);
+    if (isTableLine !== inMono) {
+      flushBuf();
+      inMono = isTableLine;
+    }
+    if (line.trim() === '' && !inMono) {
+      flushBuf();
+    } else {
+      buf.push(line);
+    }
+  }
+  flushBuf();
+  return html;
+}
+
+/**
+ * Build and download a Word document containing all drafted notes.
+ *
+ * @param {Array<{issueId, noteTitle, noteText}>} draftedNotes
+ * @param {object} company    - analysis.company
+ * @param {object} reportFields - { firmName, partnerName, ... }
+ */
+export function downloadSuggestedNotesWord(draftedNotes, company, reportFields = {}) {
+  const safeName = (company?.name || 'Company')
+    .replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 40);
+  const notesHtml = (draftedNotes || []).map((n, idx) => `
+    <h3 style="font-size:13pt;font-weight:bold;margin:18pt 0 6pt;color:#1a3d2e;">
+      ${idx + 1}. ${escapeHtml(n.noteTitle || 'Suggested Note')}
+      ${n.issueId ? `<span style="font-size:10pt;color:#5c5e58;font-weight:normal;font-family:'Courier New',monospace;">  [${escapeHtml(n.issueId)}]</span>` : ''}
+    </h3>
+    ${noteBodyToHtml(n.noteText)}
+  `).join('');
+
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8"/>
+<title>Suggested Notes to Financial Statements — ${escapeHtml(company?.name || 'Company')}</title>
+<style>
+  body { font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.4; color: #000; }
+</style>
+</head>
+<body>
+  <h1 style="font-size:16pt;font-weight:bold;text-align:center;margin:0 0 6pt;text-decoration:underline;">
+    Suggested Notes to the Financial Statements
+  </h1>
+  <p style="text-align:center;font-style:italic;margin:0 0 6pt;">${escapeHtml(company?.name || 'Company')}</p>
+  <p style="text-align:center;margin:0 0 18pt;font-size:10pt;">
+    Drafted for review pursuant to the Schedule III (Division I) substantive review.<br/>
+    ${reportFields.firmName ? escapeHtml(reportFields.firmName) + ' · ' : ''}${reportFields.firmFRN ? 'FRN ' + escapeHtml(reportFields.firmFRN) : ''}
+  </p>
+  <p style="margin:10pt 0;text-align:justify;font-style:italic;color:#5c5e58;">
+    The note drafts below are AI-generated suggestions in standard Schedule III wording. Verify every figure, every reference, and every fact against the company's records before adopting in the financial statements. Placeholders shown as [XX] are to be filled by the preparer.
+  </p>
+  ${notesHtml || '<p>No notes drafted.</p>'}
+</body>
+</html>`;
+
+  downloadAsWord(html, `${safeName}_Suggested_Notes.doc`);
+}
+
 /**
  * Convenience wrapper — computes ifcofrApplies and triggers download.
  */
