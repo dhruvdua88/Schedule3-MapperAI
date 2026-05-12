@@ -26,7 +26,9 @@ import {
 import { computeCaroApplicability, synthesiseExemptCaroResult } from '../lib/caroApplicability.js';
 import { sanitiseSch3Response } from '../lib/sch3Sanitise.js';
 import { anchorIssuesToPages } from '../lib/sourceAnchor.js';
+import { setIssueStatus, setIssueNote } from '../lib/issueState.js';
 import { SourceModal } from './SourceModal.jsx';
+import { IssueList } from './IssueList.jsx';
 
 import { SettingsGate }          from './SettingsGate.jsx';
 import { SettingsPanel }         from './SettingsPanel.jsx';
@@ -35,7 +37,6 @@ import { FileUpload }            from './FileUpload.jsx';
 import { PdfMarkdownPreview }    from './PdfMarkdownPreview.jsx';
 import { AnalyzingProgress }     from './AnalyzingProgress.jsx';
 import { SeveritySummary }       from './SeveritySummary.jsx';
-import { IssueCard }             from './IssueCard.jsx';
 import { CaroApplicabilityView } from './CaroApplicabilityView.jsx';
 import { ClauseRow }             from './ClauseRow.jsx';
 import { AuditReportTab }        from './AuditReportTab.jsx';
@@ -186,6 +187,11 @@ export function ScheduleIIIReviewer() {
   const [chatOpen,     setChatOpen]     = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatSending,  setChatSending]  = useState(false);
+
+  // ── Issue review state (Accept / Dismiss / For-review + audit trail) ──
+  // Shape: { [issueId]: { status, history, note } } — see lib/issueState.js
+  const [issueStates,        setIssueStates]        = useState({});
+  const [currentEngagementId, setCurrentEngagementId] = useState(null);
 
   // ── Analysis ──
   const [analysis,    setAnalysis]    = useState(null);
@@ -443,7 +449,10 @@ export function ScheduleIIIReviewer() {
       }
 
       // ── Auto-save engagement ───────────────────────────────────────────
-      saveEngagement({ analysis: sch3, caro: finalCaro, reportFields });
+      // Reset issue states for a fresh engagement.
+      setIssueStates({});
+      const newId = saveEngagement({ analysis: sch3, caro: finalCaro, reportFields, issueStates: {} });
+      setCurrentEngagementId(newId);
 
       setPhase('done');
       setTab('issues');
@@ -476,7 +485,7 @@ export function ScheduleIIIReviewer() {
       setTokenUsage((prev) => ({ ...prev, caro: null }));
       const finalCaro = await _runCaroCall(analysis, ctrl);
       setCaro(finalCaro);
-      saveEngagement({ analysis, caro: finalCaro, reportFields });
+      saveEngagement({ analysis, caro: finalCaro, reportFields, issueStates, id: currentEngagementId });
       setPhase('done');
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -578,6 +587,26 @@ export function ScheduleIIIReviewer() {
     downloadSuggestedNotesWord(draftedNotes, analysis?.company, reportFields);
   };
 
+  // ════════════════════════════════════════════════════
+  // ISSUE REVIEW ACTIONS — Accept / Dismiss / For-review / Note
+  // ════════════════════════════════════════════════════
+  const reviewerName = settings.partnerName || settings.firmName || 'Reviewer';
+
+  const handleSetIssueStatus = useCallback((issueId, nextStatus) => {
+    setIssueStates((prev) => setIssueStatus(prev, issueId, nextStatus, reviewerName));
+  }, [reviewerName]);
+
+  const handleSetIssueNote = useCallback((issueId, note) => {
+    setIssueStates((prev) => setIssueNote(prev, issueId, note));
+  }, []);
+
+  // Persist issue-state changes to the current engagement entry so they
+  // survive page reloads. Skipped before the engagement is first saved.
+  useEffect(() => {
+    if (!currentEngagementId || !analysis) return;
+    saveEngagement({ analysis, caro, reportFields, issueStates, id: currentEngagementId });
+  }, [issueStates]);  // intentionally only on issueStates change
+
   // Build the chat system prompt — packs the engagement context so the model
   // can answer with specific facts rather than generic Schedule III boilerplate.
   const buildChatSystemPrompt = () => {
@@ -664,7 +693,7 @@ INSTRUCTIONS
   // ════════════════════════════════════════════════════
   const handleExportEngagement = () => {
     if (!analysis) return;
-    exportEngagement({ analysis, caro, reportFields });
+    exportEngagement({ analysis, caro, reportFields, issueStates });
   };
 
   const handleImportEngagement = async (f) => {
@@ -682,19 +711,26 @@ INSTRUCTIONS
   };
 
   const applyEngagement = (eng) => {
-    // loadEngagement returns a list entry with { data: {analysis,caro,reportFields} }
-    // importEngagement returns { analysis, caro, reportFields } directly (version 1 format)
+    // loadEngagement returns a list entry with { data: {analysis,caro,reportFields,issueStates} }
+    // importEngagement returns { analysis, caro, reportFields, issueStates } directly
     const analysis    = eng.data?.analysis    ?? eng.analysis;
     const caro        = eng.data?.caro        ?? eng.caro        ?? null;
     const reportFields = eng.data?.reportFields ?? eng.reportFields ?? { ...DEFAULT_REPORT_FIELDS };
+    const restoredIssueStates = eng.data?.issueStates ?? eng.issueStates ?? {};
+    const engId = eng.id || eng.data?.id || null;
     if (!analysis) return;
     setAnalysis(analysis);
     setCaro(caro);
     setReportFields(reportFields);
+    setIssueStates(restoredIssueStates);
+    setCurrentEngagementId(engId);
     setPhase('done');
     setTab('issues');
     setMarkdown('');
     setFile(null);
+    // Imported engagement has no PDF in memory, so source-page modal will
+    // gracefully degrade to its "not anchored" state.
+    setPdfPages([]);
   };
 
   // ════════════════════════════════════════════════════
@@ -705,6 +741,7 @@ INSTRUCTIONS
     setSourceModalIssue(null);
     setDraftedNotes(null); setNotesGenerating(false);
     setChatOpen(false); setChatMessages([]); setChatSending(false);
+    setIssueStates({}); setCurrentEngagementId(null);
     setAnalysis(null); setCaro(null);
     setPhase('upload');
     setFileError(''); setExtractError(''); setAnalysisError('');
@@ -919,16 +956,13 @@ INSTRUCTIONS
                     No Schedule III issues flagged. ✓
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    {issuesSorted.map((iss, idx) => (
-                      <IssueCard
-                        key={iss.id || idx}
-                        issue={iss}
-                        index={idx + 1}
-                        onViewSource={(it) => setSourceModalIssue(it)}
-                      />
-                    ))}
-                  </div>
+                  <IssueList
+                    issues={issuesSorted}
+                    issueStates={issueStates}
+                    onSetStatus={handleSetIssueStatus}
+                    onSetNote={handleSetIssueNote}
+                    onViewSource={(it) => setSourceModalIssue(it)}
+                  />
                 )}
               </div>
             )}

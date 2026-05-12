@@ -73,21 +73,48 @@ export function listEngagements() {
 
 /**
  * Save an engagement. Keeps last 5.
- * Stores analysis + caro + reportFields (NO pdf markdown — per user spec).
- * Returns the generated id.
+ *
+ * - If `id` matches an existing entry, that entry is updated in place
+ *   (preserves its position in the list and original `date`). This is
+ *   how per-issue state changes survive without polluting the list.
+ * - If `id` is omitted or unmatched, a new entry is created at the top
+ *   and the list is trimmed to 5.
+ *
+ * Returns the entry's id.
  */
-export function saveEngagement({ analysis, caro, reportFields }) {
-  const list  = listEngagements();
+export function saveEngagement({ analysis, caro, reportFields, issueStates, id } = {}) {
+  const list = listEngagements();
+  const dataPayload = { analysis, caro, reportFields, issueStates: issueStates || {} };
+
+  const existingIdx = id ? list.findIndex((e) => e.id === id) : -1;
+  if (existingIdx >= 0) {
+    const existing = list[existingIdx];
+    const updated = {
+      ...existing,
+      companyName: analysis?.company?.name || existing.companyName,
+      cin:         analysis?.company?.cin  || existing.cin,
+      yearEnd:     analysis?.company?.yearEnd || existing.yearEnd,
+      counts:      countsBySeverity(analysis?.scheduleIIIIssues || []),
+      caroApplies: !!caro?.applicability?.applies,
+      lastModified: new Date().toISOString(),
+      data:        dataPayload,
+    };
+    const newList = [...list];
+    newList[existingIdx] = updated;
+    localStorage.setItem(KEY_LIST, JSON.stringify(newList));
+    return existing.id;
+  }
+
+  // New entry
   const entry = {
-    id:          Date.now().toString(),
+    id:          id || Date.now().toString(),
     companyName: analysis?.company?.name || 'Unknown',
     cin:         analysis?.company?.cin  || '',
     yearEnd:     analysis?.company?.yearEnd || '',
     date:        new Date().toISOString(),
     counts:      countsBySeverity(analysis?.scheduleIIIIssues || []),
     caroApplies: !!caro?.applicability?.applies,
-    // Full data stored here (no markdown)
-    data: { analysis, caro, reportFields },
+    data:        dataPayload,
   };
   const updated = [entry, ...list].slice(0, 5);
   localStorage.setItem(KEY_LIST, JSON.stringify(updated));
@@ -105,13 +132,14 @@ export function deleteEngagement(id) {
 }
 
 // ---- Export / Import Engagement as JSON ----
-export function exportEngagement({ analysis, caro, reportFields }) {
+export function exportEngagement({ analysis, caro, reportFields, issueStates }) {
   const payload = JSON.stringify({
-    version:    1,
+    version:    2,
     exportedAt: new Date().toISOString(),
     analysis,
     caro,
     reportFields,
+    issueStates: issueStates || {},
   }, null, 2);
 
   const blob    = new Blob([payload], { type: 'application/json' });
