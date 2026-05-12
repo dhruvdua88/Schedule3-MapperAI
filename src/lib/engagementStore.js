@@ -4,6 +4,7 @@
 const KEY_API       = 'ddandco_deepseek_key';
 const KEY_SETTINGS  = 'ddandco_settings';
 const KEY_LIST      = 'ddandco_engagements';
+const KEY_PREFS     = 'ddandco_run_prefs';   // last-used model + runCaro toggle
 
 // ---- API Key ----
 export function getApiKey()     { return localStorage.getItem(KEY_API) || ''; }
@@ -32,6 +33,27 @@ export function getSettings() {
 
 export function saveSettings(s) {
   localStorage.setItem(KEY_SETTINGS, JSON.stringify(s));
+}
+
+// ---- Per-run preferences (model + CARO toggle from PdfMarkdownPreview) ----
+const DEFAULT_RUN_PREFS = {
+  model:   null,   // null = use settings.model; otherwise overrides
+  runCaro: true,
+};
+
+export function getRunPrefs() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(KEY_PREFS));
+    return stored ? { ...DEFAULT_RUN_PREFS, ...stored } : { ...DEFAULT_RUN_PREFS };
+  } catch {
+    return { ...DEFAULT_RUN_PREFS };
+  }
+}
+
+export function saveRunPrefs(p) {
+  try {
+    localStorage.setItem(KEY_PREFS, JSON.stringify(p));
+  } catch { /* localStorage full or unavailable — silent fail */ }
 }
 
 // ---- Recent Engagements (last 5, metadata only) ----

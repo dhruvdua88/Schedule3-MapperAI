@@ -23,6 +23,69 @@ export class ApiError extends Error {
   constructor(msg, status) { super(msg); this.name = 'ApiError'; this.status = status; }
 }
 
+// ============================================================
+// In-memory response cache
+// ------------------------------------------------------------
+// Keyed by hash of (model + temperature + top_p + systemPrompt + userPrompt).
+// Module-scoped Map — survives across renders in the same session, cleared
+// on page reload. Skipped for streaming calls (caller wants live feedback).
+// ============================================================
+const _responseCache = new Map();
+
+async function hashKey({ model, temperature, top_p, systemPrompt, userPrompt }) {
+  const enc = new TextEncoder();
+  const payload = enc.encode(
+    `${model}|${temperature}|${top_p}|${systemPrompt}|${userPrompt}`
+  );
+  if (globalThis.crypto?.subtle) {
+    const buf = await globalThis.crypto.subtle.digest('SHA-256', payload);
+    return Array.from(new Uint8Array(buf))
+      .map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  // Fallback (non-crypto contexts): cheap djb2-ish hash
+  let h = 5381;
+  for (let i = 0; i < payload.length; i++) h = ((h << 5) + h + payload[i]) | 0;
+  return 'fallback:' + (h >>> 0).toString(16);
+}
+
+export function clearDeepSeekCache() {
+  _responseCache.clear();
+}
+
+// ============================================================
+// Retry helper
+// ------------------------------------------------------------
+// Retries on 429 and 5xx with exponential backoff + jitter.
+// Does NOT retry: auth (401/403), credit (402), bad request (400),
+// aborts, or already-parsed JSON errors. Streaming calls retry too,
+// but only on connection-level / pre-stream failures.
+// ============================================================
+const RETRY_BASE_MS = 1_000;
+const RETRY_MAX_ATTEMPTS = 3;
+
+function isRetryable(err) {
+  if (err?.name === 'AbortError')   return false;
+  if (err instanceof AuthError)     return false;
+  if (err instanceof RateLimitError) return true;
+  if (err instanceof ApiError && typeof err.status === 'number') {
+    return err.status === 429 || (err.status >= 500 && err.status < 600);
+  }
+  // Network errors (TypeError) — retry once
+  if (err instanceof TypeError) return true;
+  return false;
+}
+
+function delay(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    if (signal) {
+      const onAbort = () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); };
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    }
+  });
+}
+
 /**
  * Call the DeepSeek chat completions endpoint.
  *
@@ -36,7 +99,9 @@ export class ApiError extends Error {
  * @param {function} [opts.onFirstToken] - Called once when the first content chunk arrives.
  *                                         If provided, the call switches to streaming mode (SSE).
  *                                         The final parsed JSON is still returned from the promise.
- * @param {number}   [opts.temperature] - Sampling temperature (default: 0.2). SCH3 uses 0.1.
+ * @param {number}   [opts.temperature] - Sampling temperature (default: 0.0).
+ * @param {number}   [opts.top_p]      - Nucleus sampling cutoff (default: 0.1).
+ * @param {boolean}  [opts.bypassCache] - Skip cache lookup and store (default: false).
  * @returns {Promise<object>}          - Parsed JSON object from model response
  */
 export async function callDeepSeek({
@@ -47,12 +112,71 @@ export async function callDeepSeek({
   signal,
   onUsage,
   onFirstToken,
-  temperature = 0.2,
+  temperature = 0.0,
+  top_p       = 0.1,
+  bypassCache = false,
 }) {
   if (!apiKey) throw new AuthError('No API key provided. Please add your DeepSeek API key in Settings.');
 
   const useStreaming = typeof onFirstToken === 'function';
 
+  // ── Cache check (non-streaming only; streaming consumers want live feedback) ──
+  let cacheKey = null;
+  if (!useStreaming && !bypassCache) {
+    try {
+      cacheKey = await hashKey({ model, temperature, top_p, systemPrompt, userPrompt });
+      if (_responseCache.has(cacheKey)) {
+        const cached = _responseCache.get(cacheKey);
+        if (onUsage && cached._usage) onUsage(cached._usage);
+        // Deep-clone so the caller can mutate freely.
+        return JSON.parse(JSON.stringify(cached.value));
+      }
+    } catch { /* hashing failure shouldn't break the call */ }
+  }
+
+  // ── Retry loop ──
+  let lastErr;
+  for (let attempt = 1; attempt <= RETRY_MAX_ATTEMPTS; attempt++) {
+    try {
+      const result = await _doCall({
+        apiKey, model, systemPrompt, userPrompt, signal,
+        onUsage: (u) => {
+          if (cacheKey) {
+            // Stash usage on the cached entry once it's written.
+            const entry = _responseCache.get(cacheKey);
+            if (entry) entry._usage = u;
+          }
+          if (onUsage) onUsage(u);
+        },
+        onFirstToken, temperature, top_p, useStreaming,
+      });
+
+      // Stash in cache on success.
+      if (cacheKey) {
+        _responseCache.set(cacheKey, { value: result, _usage: null });
+      }
+      return result;
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryable(err) || attempt === RETRY_MAX_ATTEMPTS) throw err;
+      // Backoff with jitter: 1s, 2s, 4s ± 30%
+      const base = RETRY_BASE_MS * Math.pow(2, attempt - 1);
+      const jitter = base * (0.7 + Math.random() * 0.6);
+      // eslint-disable-next-line no-console
+      console.warn(`[deepseek] retry ${attempt}/${RETRY_MAX_ATTEMPTS - 1} after ${Math.round(jitter)}ms — ${err.message}`);
+      await delay(jitter, signal);
+    }
+  }
+  throw lastErr;
+}
+
+// ============================================================
+// Internal — single attempt at the API call
+// ============================================================
+async function _doCall({
+  apiKey, model, systemPrompt, userPrompt, signal,
+  onUsage, onFirstToken, temperature, top_p, useStreaming,
+}) {
   let response;
   try {
     response = await fetch(`${BASE_URL}/chat/completions`, {
@@ -70,6 +194,7 @@ export async function callDeepSeek({
         ],
         response_format: { type: 'json_object' },
         temperature,
+        top_p,
         max_tokens:   16000,
         stream:       useStreaming,
         ...(useStreaming ? { stream_options: { include_usage: true } } : {}),

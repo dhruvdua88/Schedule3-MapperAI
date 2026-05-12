@@ -20,8 +20,10 @@ import { exportExcel }                           from '../lib/excelExport.js';
 import { fmtLakhs }                              from '../lib/format.js';
 import {
   getApiKey, getSettings, saveEngagement, loadEngagement, importEngagement,
-  exportEngagement,
+  exportEngagement, getRunPrefs, saveRunPrefs,
 } from '../lib/engagementStore.js';
+import { computeCaroApplicability, synthesiseExemptCaroResult } from '../lib/caroApplicability.js';
+import { sanitiseSch3Response } from '../lib/sch3Sanitise.js';
 
 import { SettingsGate }          from './SettingsGate.jsx';
 import { SettingsPanel }         from './SettingsPanel.jsx';
@@ -171,19 +173,31 @@ export function ScheduleIIIReviewer() {
   const abortRef = useRef(null);
 
   // ── Per-run controls (overridable in PdfMarkdownPreview before each Analyse) ──
-  const [selectedModel, setSelectedModel] = useState(() => getSettings().model || 'deepseek-v4-pro');
-  const [runCaro,       setRunCaro]       = useState(true);
+  // Restore last-used choices from localStorage so the user's preferences
+  // survive across engagements. The Settings panel still owns the global default.
+  const [selectedModel, setSelectedModel] = useState(() => {
+    const prefs = getRunPrefs();
+    return prefs.model || getSettings().model || 'deepseek-v4-pro';
+  });
+  const [runCaro, setRunCaro] = useState(() => getRunPrefs().runCaro);
   // Tracks whether the model has begun streaming output for the active call.
   const [analysisStartedAt,    setAnalysisStartedAt]    = useState(null);
   const [firstTokenReceivedAt, setFirstTokenReceivedAt] = useState(null);
 
-  // Keep selectedModel in sync if the user changes the default in Settings.
+  // Keep selectedModel in sync if the user changes the default in Settings —
+  // but only when there's no explicit per-run pref saved.
   useEffect(() => {
-    if (settings.model && settings.model !== selectedModel) {
+    const prefs = getRunPrefs();
+    if (!prefs.model && settings.model && settings.model !== selectedModel) {
       setSelectedModel(settings.model);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.model]);
+
+  // Persist per-run preferences whenever the user changes them.
+  useEffect(() => {
+    saveRunPrefs({ model: selectedModel, runCaro });
+  }, [selectedModel, runCaro]);
 
   // ── Results ──
   const [tab,          setTab]         = useState('issues');
@@ -268,14 +282,25 @@ export function ScheduleIIIReviewer() {
   // ANALYSIS (SCH3 → optionally CARO)
   // ════════════════════════════════════════════════════
 
-  // Internal helper: run CARO given a Schedule III analysis result, an abort signal,
-  // and an existing reportFields snapshot to merge into auto-save.
-  // Returns the merged CARO object (with applicability + clauses).
+  // Internal helper: decide CARO applicability client-side from keyMetrics, then
+  // either (a) skip the API call entirely and synthesise a "Does not apply"
+  // object, or (b) fire the CARO LLM call. Returns the merged CARO object.
   const _runCaroCall = async (sch3, ctrl) => {
+    const metrics = sch3.keyMetrics || {};
+    const applicability = computeCaroApplicability(metrics);
+
+    // (a) Client-side exempt — skip the API call entirely.
+    if (!applicability.applies) {
+      // Stub token usage so the header reflects "0 tokens" for CARO rather than null.
+      setTokenUsage((prev) => ({ ...prev, caro: { input_tokens: 0, output_tokens: 0 } }));
+      return synthesiseExemptCaroResult(metrics);
+    }
+
+    // (b) CARO applies — call DeepSeek for clause-level review.
     const caroJson = await callDeepSeek({
       apiKey,
       model:        selectedModel,
-      systemPrompt: 'You are a senior Chartered Accountant applying CARO 2020 to Indian companies.',
+      systemPrompt: 'You are a senior Chartered Accountant applying CARO 2020 to Indian companies. Quote verbatim from the source where you cite figures or text. Do not paraphrase. Do not infer facts that are not in the document.',
       userPrompt:   CARO_PROMPT(
         sch3.keyMetrics,
         sch3.company?.name,
@@ -283,15 +308,23 @@ export function ScheduleIIIReviewer() {
         sch3.company?.natureOfBusiness,
       ),
       signal:       ctrl.signal,
+      temperature:  0.0,
+      top_p:        0.1,
       onUsage:      (u) => setTokenUsage((prev) => ({ ...prev, caro: u })),
       onFirstToken: () => setFirstTokenReceivedAt(Date.now()),
     });
+
+    // Trust client-side applicability if it disagrees with the LLM — arithmetic
+    // is more reliable than the model. We only use the LLM for clause review.
+    const finalApplicability = caroJson.applicability?.applies !== undefined
+      ? (applicability.applies ? caroJson.applicability : applicability)
+      : applicability;
 
     // Merge ICAI standard wording with AI-flagged review status
     const statusMap = new Map();
     (caroJson.clauseStatus || []).forEach((s) => statusMap.set(s.paragraph, s));
 
-    const mergedClauses = caroJson.applicability?.applies
+    const mergedClauses = finalApplicability.applies
       ? STANDARD_CARO_REMARKS.map((std) => {
           const status = statusMap.get(std.paragraph) || { needsReview: false, reviewNote: '' };
           return {
@@ -306,7 +339,7 @@ export function ScheduleIIIReviewer() {
         })
       : [];
 
-    return { applicability: caroJson.applicability, clauses: mergedClauses };
+    return { applicability: finalApplicability, clauses: mergedClauses };
   };
 
   const runAnalysis = async (mdText, opts = {}) => {
@@ -325,16 +358,19 @@ export function ScheduleIIIReviewer() {
       setAnalysisStartedAt(Date.now());
       setFirstTokenReceivedAt(null);
 
-      const sch3 = await callDeepSeek({
+      const rawSch3 = await callDeepSeek({
         apiKey,
         model:        selectedModel,
-        systemPrompt: 'You are a senior Chartered Accountant reviewing Indian company financial statements for Schedule III compliance.',
+        systemPrompt: 'You are a senior Chartered Accountant reviewing Indian company financial statements for Schedule III compliance. Quote verbatim from the source document where you cite figures or disclosure text. Do not paraphrase. Do not infer facts that are not present in the document. If a required disclosure is absent, say so explicitly with the phrase "Disclosure not located in the document".',
         userPrompt:   `${mdText}\n\n${SCH3_PROMPT}`,
         signal:       ctrl.signal,
-        temperature:  0.1,
+        temperature:  0.0,
+        top_p:        0.1,
         onUsage:      (u) => setTokenUsage((prev) => ({ ...prev, sch3: u })),
         onFirstToken: () => setFirstTokenReceivedAt(Date.now()),
       });
+      // Sanity-filter the response — drop issues without evidence
+      const sch3 = sanitiseSch3Response(rawSch3);
       setAnalysis(sch3);
 
       // ── Phase 2: CARO (optional) ───────────────────────────────────────
