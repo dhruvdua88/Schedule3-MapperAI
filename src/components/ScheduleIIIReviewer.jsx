@@ -27,6 +27,7 @@ import { computeCaroApplicability, synthesiseExemptCaroResult } from '../lib/car
 import { sanitiseSch3Response } from '../lib/sch3Sanitise.js';
 import { anchorIssuesToPages } from '../lib/sourceAnchor.js';
 import { setIssueStatus, setIssueNote } from '../lib/issueState.js';
+import { runRuleEngine, mergeAnalyses } from '../lib/ruleEngine.js';
 import { SourceModal } from './SourceModal.jsx';
 import { IssueList } from './IssueList.jsx';
 
@@ -159,6 +160,10 @@ export function ScheduleIIIReviewer() {
   const [apiKey,      setApiKey]      = useState(() => getApiKey() || '');
   const [settings,    setSettings]    = useState(() => getSettings());
   const [showSettings, setShowSettings] = useState(false);
+  // Soft-gate — user can dismiss the API-key prompt and use Quick Review only
+  const [gateSkipped, setGateSkipped] = useState(false);
+  // Tracks last-analysis source so the Done screen can show appropriate CTAs
+  const [analysisSource, setAnalysisSource] = useState(null);  // 'rule' | 'rule+ai'
 
   // ── Upload phase ──
   const [file,     setFile]     = useState(null);
@@ -407,6 +412,45 @@ export function ScheduleIIIReviewer() {
     return { applicability: finalApplicability, clauses: mergedClauses };
   };
 
+  // ════════════════════════════════════════════════════
+  // QUICK REVIEW — deterministic, no API call.
+  // Runs the rule engine, optionally synthesises CARO applicability
+  // client-side, and lands on the Done screen instantly.
+  // ════════════════════════════════════════════════════
+  const runQuickReview = async (mdText) => {
+    if (!mdText?.trim()) return;
+    setAnalysisError('');
+
+    setPhase('analyzing-sch3');
+    setAnalysisStartedAt(Date.now());
+    setTokenUsage({ sch3: { input_tokens: 0, output_tokens: 0 }, caro: null });
+
+    // Rule engine is synchronous; wrap in microtask just so the loading state shows briefly.
+    await new Promise((r) => setTimeout(r, 200));
+
+    const ruleResult = runRuleEngine(mdText);
+    // Anchor issues to PDF pages so the "View source" chip still works on rule findings.
+    const anchored = anchorIssuesToPages(ruleResult, pdfPages);
+    setAnalysis(anchored);
+    setAnalysisSource('rule');
+
+    // Synthesise CARO applicability locally too (deterministic arithmetic).
+    const caroLocal = synthesiseExemptCaroResult(ruleResult.keyMetrics);
+    // If the metrics suggest CARO applies, leave it unanalysed but keep
+    // the applicability conclusion so the user can opt into the AI CARO call.
+    setCaro(caroLocal.applicability.applies
+      ? { applicability: computeCaroApplicability(ruleResult.keyMetrics), clauses: [] }
+      : caroLocal);
+
+    // Reset issue states + start a new engagement entry.
+    setIssueStates({});
+    const newId = saveEngagement({ analysis: anchored, caro: caroLocal, reportFields, issueStates: {} });
+    setCurrentEngagementId(newId);
+
+    setPhase('done');
+    setTab('issues');
+  };
+
   const runAnalysis = async (mdText, opts = {}) => {
     if (!mdText?.trim()) return;
     const shouldRunCaro = opts.runCaro !== undefined ? opts.runCaro : runCaro;
@@ -435,10 +479,19 @@ export function ScheduleIIIReviewer() {
         onUsage:      (u) => setTokenUsage((prev) => ({ ...prev, sch3: u })),
         onFirstToken: () => setFirstTokenReceivedAt(Date.now()),
       });
-      // Sanity-filter the response, then stamp each issue with its source page.
+      // Sanity-filter the AI response.
       const sanitised = sanitiseSch3Response(rawSch3);
-      const sch3 = anchorIssuesToPages(sanitised, pdfPages);
+
+      // Run the deterministic rule engine and merge with the AI findings.
+      // Rule-engine catches arithmetic/tie-out issues the AI tends to miss;
+      // AI catches semantic/judgement issues the rule engine can't reason about.
+      const ruleResult = runRuleEngine(mdText);
+      const merged    = mergeAnalyses(ruleResult, sanitised);
+
+      // Stamp source-page anchors on the merged issue list.
+      const sch3 = anchorIssuesToPages(merged, pdfPages);
       setAnalysis(sch3);
+      setAnalysisSource('rule+ai');
 
       // ── Phase 2: CARO (optional) ───────────────────────────────────────
       let finalCaro = null;
@@ -771,6 +824,7 @@ INSTRUCTIONS
     setChatOpen(false); setChatMessages([]); setChatSending(false);
     setIssueStates({}); setCurrentEngagementId(null);
     setAnalysis(null); setCaro(null);
+    setAnalysisSource(null);
     setPhase('upload');
     setFileError(''); setExtractError(''); setAnalysisError('');
     setReportFields({ ...DEFAULT_REPORT_FIELDS });
@@ -798,15 +852,16 @@ INSTRUCTIONS
     : [];
 
   // ════════════════════════════════════════════════════
-  // FIRST-RUN GATE
+  // FIRST-RUN GATE — soft gate, can be skipped for Quick Review only
   // ════════════════════════════════════════════════════
-  if (!apiKey) {
+  if (!apiKey && !gateSkipped) {
     return (
       <SettingsGate
         onUnlock={(key) => {
           setApiKey(key);
           setSettings(getSettings());
         }}
+        onSkip={() => setGateSkipped(true)}
       />
     );
   }
@@ -887,7 +942,16 @@ INSTRUCTIONS
             pdfMeta={pdfMeta}
             onMarkdownChange={setMarkdown}
             onReExtract={() => runExtract()}
-            onAnalyze={(md) => runAnalysis(md, { runCaro })}
+            onQuickReview={(md) => runQuickReview(md)}
+            onAnalyze={(md) => {
+              if (!apiKey) {
+                // Deep AI clicked without a key — open the Settings drawer so user can paste one.
+                setShowSettings(true);
+                return;
+              }
+              runAnalysis(md, { runCaro });
+            }}
+            hasApiKey={!!apiKey}
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
             runCaro={runCaro}
@@ -974,6 +1038,41 @@ INSTRUCTIONS
             {tab === 'issues' && (
               <div className="fade-in">
                 <SeveritySummary counts={counts} />
+
+                {/* Banner — when only the deterministic rule engine has run,
+                    offer to layer Deep AI Review on top. */}
+                {analysisSource === 'rule' && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    gap: 14, flexWrap: 'wrap',
+                    background: '#fdf6ed',
+                    border: `1px solid ${COLORS.HIGH}55`,
+                    borderRadius: 8, padding: '12px 16px',
+                    marginBottom: 14,
+                  }}>
+                    <div style={{ fontSize: 13, color: COLORS.TEXT, lineHeight: 1.5 }}>
+                      <strong style={{ color: COLORS.HIGH }}>Quick Review complete.</strong>
+                      {' '}{issuesSorted.length} finding{issuesSorted.length === 1 ? '' : 's'} from ~25 deterministic checks.
+                      The full 69-test Deep AI Review covers semantic checks the rule engine can't reason about.
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (!apiKey) { setShowSettings(true); return; }
+                        // Re-extract markdown? We don't keep it after analysis. Need user to re-upload —
+                        // but the file is still in memory IF still in this session.
+                        if (file && markdown) {
+                          runAnalysis(markdown, { runCaro });
+                        } else {
+                          alert('Please re-upload the PDF to run Deep AI Review — the source markdown is no longer in memory for this engagement.');
+                        }
+                      }}
+                      style={{ ...BTN_PRIMARY, background: COLORS.HIGH, fontSize: 12, padding: '8px 14px' }}
+                    >
+                      {apiKey ? 'Run Deep AI Review on top →' : 'Add API key to run Deep AI →'}
+                    </button>
+                  </div>
+                )}
+
                 {issuesSorted.length === 0 ? (
                   <div style={{
                     textAlign: 'center', padding: '48px 24px',

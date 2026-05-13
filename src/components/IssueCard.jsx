@@ -91,6 +91,32 @@ function EvidenceField({ quote, noteRef, sourcePage, onViewSource }) {
   );
 }
 
+// Source pill — distinguishes deterministic rule-engine findings from AI findings.
+const SOURCE_META = {
+  'rule':    { label: 'Rule',    color: '#5c5e58', bg: '#f4f4ef', tooltip: 'Detected by the deterministic rule engine (no AI used).' },
+  'ai':      { label: 'AI',      color: '#1a3d2e', bg: '#f4f7ee', tooltip: 'Detected by the DeepSeek AI review.' },
+  'rule+ai': { label: 'Rule + AI', color: '#8c721b', bg: '#fbf8ed', tooltip: 'Detected by BOTH the rule engine and the AI review — high-confidence finding.' },
+};
+function SourcePill({ source }) {
+  if (!source) return null;
+  const meta = SOURCE_META[source];
+  if (!meta) return null;
+  return (
+    <span
+      title={meta.tooltip}
+      style={{
+        fontSize: 10, fontWeight: 600,
+        textTransform: 'uppercase', letterSpacing: '0.05em',
+        padding: '1px 6px', borderRadius: 3,
+        background: meta.bg, color: meta.color,
+        border: `1px solid ${meta.color}33`,
+      }}
+    >
+      {meta.label}
+    </span>
+  );
+}
+
 function StatusPill({ status }) {
   if (!status || status === 'open') return null;
   const meta = ISSUE_STATUS[status];
@@ -341,6 +367,7 @@ export function IssueCard({
           <span style={{ fontSize: 10, color: COLORS.TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             {issue.category}
           </span>
+          <SourcePill source={issue.source} />
           <StatusPill status={status} />
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
             {expanded

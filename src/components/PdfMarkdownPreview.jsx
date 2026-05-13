@@ -4,7 +4,10 @@
 // Also chooses the model and toggles whether CARO runs after Schedule III.
 
 import React, { useState, useRef } from 'react';
-import { FileText, Edit3, RefreshCw, Sparkles, AlertTriangle, Eye, ChevronDown, ChevronUp, ShieldCheck, Zap, Brain, ScanLine, Loader2 } from 'lucide-react';
+import {
+  FileText, Edit3, RefreshCw, Sparkles, AlertTriangle, Eye, ChevronDown, ChevronUp,
+  ShieldCheck, Zap, Brain, ScanLine, Loader2, FastForward, KeyRound,
+} from 'lucide-react';
 import { COLORS, FONTS, BTN_PRIMARY, BTN_GHOST } from '../styles/tokens.js';
 
 const APPROX_CHARS_PER_TOKEN = 4;
@@ -12,9 +15,11 @@ const APPROX_CHARS_PER_TOKEN = 4;
 export function PdfMarkdownPreview({
   markdown, pdfMeta,
   onAnalyze, onReExtract, onMarkdownChange,
+  onQuickReview,           // run rule engine only — no API needed
   selectedModel, onModelChange,
   runCaro, onRunCaroChange,
   onRunOCR, ocrRunning, ocrProgress,
+  hasApiKey,               // bool — drives the Deep AI CTA copy
 }) {
   const [editing, setEditing]       = useState(false);
   const [localMd, setLocalMd]       = useState(markdown);
@@ -44,6 +49,13 @@ export function PdfMarkdownPreview({
       onMarkdownChange?.(localMd);
     }
     onAnalyze(localMd);
+  };
+
+  const handleQuickReview = () => {
+    if (editing) {
+      onMarkdownChange?.(localMd);
+    }
+    onQuickReview?.(localMd);
   };
 
   const previewLines = localMd.split('\n').slice(0, expanded ? Infinity : 30).join('\n');
@@ -218,14 +230,131 @@ export function PdfMarkdownPreview({
       {/* CTA + per-run controls */}
       <div style={{ textAlign: 'center', marginTop: 28 }}>
 
-        {/* Model segmented control */}
+        {/* Two-route choice */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14,
+          maxWidth: 720, margin: '0 auto',
+          textAlign: 'left',
+        }}>
+          {/* Route 1 — Quick Review (local, no API) */}
+          <div style={{
+            background: '#fffdf7',
+            border: `1px solid ${COLORS.BORDER}`,
+            borderLeft: `4px solid ${COLORS.PRIMARY}`,
+            borderRadius: 10, padding: 18,
+            display: 'flex', flexDirection: 'column', gap: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <FastForward size={18} color={COLORS.PRIMARY} strokeWidth={1.7} />
+              <h3 className="serif" style={{ fontSize: 16, fontWeight: 600, margin: 0, color: COLORS.TEXT }}>
+                Quick Review
+              </h3>
+              <span style={{
+                fontSize: 9, padding: '2px 6px',
+                background: '#f4f7ee', color: '#3e6034',
+                borderRadius: 3, fontWeight: 600,
+                textTransform: 'uppercase', letterSpacing: '0.05em',
+              }}>
+                No API key
+              </span>
+            </div>
+            <p style={{ fontSize: 12, color: COLORS.TEXT_MUTED, margin: 0, lineHeight: 1.5 }}>
+              Runs ~25 deterministic checks locally — key disclosures, arithmetic tie-outs, notes-to-face reconciliation. Instant. Free. Offline.
+            </p>
+            <button
+              onClick={handleQuickReview}
+              disabled={!localMd.trim()}
+              style={{
+                ...BTN_PRIMARY,
+                padding: '10px 18px', fontSize: 13,
+                opacity: localMd.trim() ? 1 : 0.4,
+                cursor: localMd.trim() ? 'pointer' : 'not-allowed',
+                width: '100%', justifyContent: 'center',
+              }}
+            >
+              <FastForward size={14} /> Run Quick Review
+            </button>
+            <span style={{ fontSize: 10, color: COLORS.TEXT_FAINT, textAlign: 'center' }}>
+              ~2 seconds · no DeepSeek call
+            </span>
+          </div>
+
+          {/* Route 2 — Deep AI Review (DeepSeek + rule engine merged) */}
+          <div style={{
+            background: '#fffdf7',
+            border: `1px solid ${COLORS.BORDER}`,
+            borderLeft: `4px solid ${hasApiKey ? COLORS.HIGH : COLORS.BORDER_STRONG}`,
+            borderRadius: 10, padding: 18,
+            display: 'flex', flexDirection: 'column', gap: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Sparkles size={18} color={COLORS.HIGH} strokeWidth={1.7} />
+              <h3 className="serif" style={{ fontSize: 16, fontWeight: 600, margin: 0, color: COLORS.TEXT }}>
+                Deep AI Review
+              </h3>
+              <span style={{
+                fontSize: 9, padding: '2px 6px',
+                background: hasApiKey ? '#fdf6ed' : '#fbf8ed',
+                color: hasApiKey ? COLORS.HIGH : COLORS.MED,
+                borderRadius: 3, fontWeight: 600,
+                textTransform: 'uppercase', letterSpacing: '0.05em',
+              }}>
+                {hasApiKey ? 'DeepSeek ready' : 'API key required'}
+              </span>
+            </div>
+            <p style={{ fontSize: 12, color: COLORS.TEXT_MUTED, margin: 0, lineHeight: 1.5 }}>
+              Full <strong>69-test</strong> AI pass over the entire document. Runs Quick Review first, then layers DeepSeek on top for the semantic / judgement checks.
+            </p>
+            <button
+              onClick={handleAnalyze}
+              disabled={!localMd.trim()}
+              style={{
+                ...BTN_PRIMARY,
+                background: hasApiKey ? COLORS.HIGH : COLORS.PRIMARY,
+                padding: '10px 18px', fontSize: 13,
+                opacity: localMd.trim() ? 1 : 0.4,
+                cursor: localMd.trim() ? 'pointer' : 'not-allowed',
+                width: '100%', justifyContent: 'center',
+              }}
+            >
+              {hasApiKey
+                ? <><Sparkles size={14} /> Run Deep AI Review</>
+                : <><KeyRound size={14} /> Add API key &amp; run Deep AI Review</>}
+            </button>
+            <span style={{ fontSize: 10, color: COLORS.TEXT_FAINT, textAlign: 'center' }}>
+              ~75 seconds · DeepSeek call · {hasApiKey ? 'API cost applies' : 'paste your DeepSeek key next'}
+            </span>
+          </div>
+        </div>
+
+        {/* CARO toggle */}
+        {onRunCaroChange && (
+          <label style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            marginTop: 18, fontSize: 13, color: COLORS.TEXT,
+            cursor: 'pointer', userSelect: 'none',
+          }}>
+            <input
+              type="checkbox"
+              checked={!!runCaro}
+              onChange={(e) => onRunCaroChange(e.target.checked)}
+              style={{ accentColor: COLORS.PRIMARY, cursor: 'pointer' }}
+            />
+            <ShieldCheck size={14} color={runCaro ? COLORS.PRIMARY : COLORS.TEXT_FAINT} />
+            <span>
+              Include <strong>CARO 2020</strong> evaluation (Deep AI Review only — Quick Review uses client-side applicability arithmetic)
+            </span>
+          </label>
+        )}
+
+        {/* Model segmented control — only meaningful for Deep AI Review */}
         {selectedModel && onModelChange && (
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 10,
-            marginBottom: 16, fontSize: 12, color: COLORS.TEXT_MUTED,
+            marginTop: 14, fontSize: 12, color: COLORS.TEXT_MUTED,
           }}>
             <span style={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, fontSize: 10 }}>
-              Model
+              AI model
             </span>
             <div style={{
               display: 'inline-flex',
@@ -239,58 +368,18 @@ export function PdfMarkdownPreview({
                 onClick={() => onModelChange('deepseek-v4-pro')}
                 icon={Brain}
                 label="pro"
-                sublabel="deeper reasoning · ~45s"
+                sublabel="deeper reasoning · ~75s"
               />
               <ModelPill
                 active={selectedModel === 'deepseek-v4-flash'}
                 onClick={() => onModelChange('deepseek-v4-flash')}
                 icon={Zap}
                 label="flash"
-                sublabel="faster · cheaper · ~25s"
+                sublabel="faster · cheaper · ~45s"
               />
             </div>
           </div>
         )}
-
-        <div>
-          <button
-            onClick={handleAnalyze}
-            disabled={!localMd.trim()}
-            style={{
-              ...BTN_PRIMARY, padding: '14px 36px', fontSize: 15,
-              opacity: localMd.trim() ? 1 : 0.4,
-              cursor: localMd.trim() ? 'pointer' : 'not-allowed',
-            }}
-          >
-            <Sparkles size={16} /> Analyse with DeepSeek
-          </button>
-        </div>
-
-        {/* CARO toggle */}
-        {onRunCaroChange && (
-          <label style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            marginTop: 14, fontSize: 13, color: COLORS.TEXT,
-            cursor: 'pointer', userSelect: 'none',
-          }}>
-            <input
-              type="checkbox"
-              checked={!!runCaro}
-              onChange={(e) => onRunCaroChange(e.target.checked)}
-              style={{ accentColor: COLORS.PRIMARY, cursor: 'pointer' }}
-            />
-            <ShieldCheck size={14} color={runCaro ? COLORS.PRIMARY : COLORS.TEXT_FAINT} />
-            <span>
-              Include <strong>CARO 2020</strong> evaluation after Schedule III review
-            </span>
-          </label>
-        )}
-
-        <p style={{ marginTop: 8, fontSize: 11, color: COLORS.TEXT_FAINT }}>
-          {runCaro
-            ? 'Schedule III review will run first, followed by CARO 2020.'
-            : 'Schedule III only — you can run CARO from the results screen if needed.'}
-        </p>
       </div>
     </div>
   );

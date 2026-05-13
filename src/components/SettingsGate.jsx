@@ -3,11 +3,11 @@
 // Only allows entry after a valid-looking key is pasted.
 
 import React, { useState } from 'react';
-import { Scale, KeyRound, ExternalLink, Eye, EyeOff } from 'lucide-react';
-import { COLORS, FONTS, BTN_PRIMARY } from '../styles/tokens.js';
+import { Scale, KeyRound, ExternalLink, Eye, EyeOff, FastForward } from 'lucide-react';
+import { COLORS, FONTS, BTN_PRIMARY, BTN_GHOST } from '../styles/tokens.js';
 import { setApiKey } from '../lib/engagementStore.js';
 
-export function SettingsGate({ onUnlock }) {
+export function SettingsGate({ onUnlock, onSkip }) {
   const [key, setKey]         = useState('');
   const [show, setShow]       = useState(false);
   const [error, setError]     = useState('');
@@ -64,8 +64,9 @@ export function SettingsGate({ onUnlock }) {
           Schedule III Reviewer
         </h1>
         <p style={{ fontSize: 13, color: COLORS.TEXT_MUTED, lineHeight: 1.55, marginBottom: 28 }}>
-          AI-assisted Schedule III &amp; CARO 2020 review for Indian Chartered Accountants.
-          Enter your <strong>DeepSeek API key</strong> to get started — it stays in your browser only.
+          Schedule III &amp; CARO 2020 review for Indian Chartered Accountants.
+          The deterministic <strong>Quick Review</strong> works without an API key.
+          For the full 69-test <strong>Deep AI Review</strong>, paste your <strong>DeepSeek API key</strong> — it stays in your browser only.
         </p>
 
         {/* Key input */}
@@ -116,13 +117,23 @@ export function SettingsGate({ onUnlock }) {
           )}
         </div>
 
-        {/* CTA */}
+        {/* CTA — Save key */}
         <button
           onClick={handleSave}
-          style={{ ...BTN_PRIMARY, width: '100%', justifyContent: 'center', padding: '12px 24px', fontSize: 14, borderRadius: 8, marginBottom: 16 }}
+          style={{ ...BTN_PRIMARY, width: '100%', justifyContent: 'center', padding: '12px 24px', fontSize: 14, borderRadius: 8, marginBottom: 10 }}
         >
-          <KeyRound size={15} /> Unlock App
+          <KeyRound size={15} /> Save key and continue
         </button>
+
+        {/* CTA — Skip and use Quick Review only */}
+        {onSkip && (
+          <button
+            onClick={onSkip}
+            style={{ ...BTN_GHOST, width: '100%', justifyContent: 'center', padding: '10px 24px', fontSize: 13, borderRadius: 8, marginBottom: 16 }}
+          >
+            <FastForward size={14} /> Skip — use Quick Review only (no API key)
+          </button>
+        )}
 
         {/* Get key link */}
         <p style={{ fontSize: 12, color: COLORS.TEXT_MUTED }}>
