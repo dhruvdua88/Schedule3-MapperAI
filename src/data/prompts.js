@@ -41,12 +41,18 @@ DO-NOT-FLAG list (common false positives):
 - "Specified Bank Notes" disclosure (defunct after FY 2016-17).
 - Absence of Cash Flow Statement for an OPC, Small Company or Dormant Company that qualifies for the AS-3 carve-out — verify against the company's classification before flagging.
 - Absence of Section 197 disclosure for a private limited company (Sec 197 only applies to public/listed companies).
+- Signing-block / DIN / place-and-date defects — flagged elsewhere in the engagement, not in this review.
+- CIF imports / detailed forex expenditure breakdown — out of scope for this engagement.
 
 TEST EXECUTION RULE for each test:
 1. Read the TRIGGER — if not satisfied, SKIP this test silently (no output).
 2. If TRIGGER is satisfied, evaluate the FAIL-IF condition.
 3. If the test PASSES (no fail-if), SKIP silently.
 4. If the test FAILS, emit ONE issue with the test ID and complete fields.
+
+OUTPUT BUDGET (HARD CAP):
+- Return at most 60 issues. If more than 60 distinct test failures exist, return the 60 highest-severity findings (CRITICAL first, then HIGH, then MEDIUM, then LOW), breaking ties by section order (A → B → C → D → E → F).
+- Strict word budgets on each issue: title ≤ 12 words, observation ≤ 50 words, evidenceQuote ≤ 30 words, implication ≤ 25 words, recommendation ≤ 25 words.
 
 ────────────────────────────────────────────
 RETURN ONLY VALID JSON (no markdown, no commentary):
@@ -222,64 +228,160 @@ T32  Rounding-off compliance — Sch III Gen Instr Para 4. [LOW]
        Total income ≥ Rs 100 cr   → Lakhs / Millions / Crores / Decimals.
      OR the rounding unit is not consistent across BS, P&L, CFS, and Notes.
 
+T33  Share reconciliation table. [HIGH]
+     TRIGGER  : Share Capital > 0.
+     FAIL IF  : The Share Capital note does not include a reconciliation of the number of shares outstanding at the beginning AND at the end of the year, showing — opening shares + shares issued during the year + shares bought back during the year + any other movement = closing shares — for each class of shares, with face value disclosed.
+
+T34  Rights, preferences and restrictions on each class of shares. [HIGH]
+     TRIGGER  : Share Capital > 0.
+     FAIL IF  : For each class of shares, the rights, preferences and restrictions (including restrictions on the distribution of dividends and the repayment of capital) are not disclosed in the Share Capital note.
+
+T35  Shares held by holding / ultimate holding / subsidiaries / associates. [HIGH]
+     TRIGGER  : The Company is a subsidiary, OR has a holding company / ultimate holding company.
+     FAIL IF  : Shares in the Company held by its holding company or its ultimate holding company, including shares held by subsidiaries or associates of the holding/ultimate holding company in the aggregate, are not disclosed.
+
+T36  Shareholders holding more than 5%. [HIGH]
+     TRIGGER  : Share Capital > 0.
+     FAIL IF  : The Share Capital note does not list each shareholder holding more than 5% of shares with name + number of shares held, separately for each class of shares.
+
+T37  Shares allotted without payment in cash — last 5 years. [MEDIUM]
+     TRIGGER  : Company has been incorporated for ≥ 5 years OR has issued any shares in the preceding 5 years.
+     FAIL IF  : Aggregate number and class of shares allotted as fully paid up pursuant to contracts without payment being received in cash, in the preceding 5 years, is not disclosed (an affirmative "nil" statement is acceptable).
+
+T38  Bonus shares allotted — last 5 years. [MEDIUM]
+     TRIGGER  : As T37.
+     FAIL IF  : Aggregate number and class of shares allotted as fully paid up by way of bonus shares in the preceding 5 years is not disclosed (affirmative "nil" statement is acceptable).
+
+T39  Shares bought back — last 5 years. [MEDIUM]
+     TRIGGER  : As T37.
+     FAIL IF  : Aggregate number and class of shares bought back in the preceding 5 years is not disclosed (affirmative "nil" statement is acceptable).
+
+T40  Calls unpaid + forfeited shares. [MEDIUM]
+     TRIGGER  : Share Capital > 0.
+     FAIL IF  : Where calls are unpaid, the amount is not separately disclosed for directors and officers; OR forfeited shares (amount originally paid up) are not separately disclosed where they exist.
+
+T41  Investments — quoted vs unquoted + market value + diminution. [HIGH]
+     TRIGGER  : Investments > 0.
+     FAIL IF  : Investments are not classified into Quoted and Unquoted; OR market value of quoted investments is not disclosed; OR aggregate provision for diminution in value of investments (with nature/circumstances of impairment) is not disclosed.
+
+T42  Borrowings — secured vs unsecured + nature of security. [HIGH]
+     TRIGGER  : Total Borrowings > 0.
+     FAIL IF  : Borrowings are not sub-classified into Secured and Unsecured; OR the nature of security (assets charged) is not specified for each secured borrowing.
+
+T43  Borrowings — terms of repayment + default disclosure + guarantees. [HIGH]
+     TRIGGER  : Total Borrowings > 0.
+     FAIL IF  : For each term loan / bond / debenture, the terms of repayment (period of maturity vs. balance sheet date, number and amount of instalments, applicable rate of interest) are not stated; OR there has been any default in repayment of loans or interest as on the balance sheet date and the period AND amount of default are not specifically disclosed (disclosure required even if remediated before the FS were approved for issue); OR aggregate amount of loans guaranteed by directors or others is not disclosed where applicable; OR debentures are not listed in descending order of maturity / conversion.
+
+T44  Current maturities of long-term debt — classification. [HIGH]
+     TRIGGER  : Long-term Borrowings exist.
+     FAIL IF  : Current maturities of long-term borrowings are shown under "Other Current Liabilities" instead of under "Short-Term Borrowings" with separate disclosure (the 2021 amendment moved this classification — current maturities now belong under Short-Term Borrowings).
+
 ════════════════════════════════════════════
 SECTION D — AS COMPLIANCE [HIGH / MEDIUM]
 ════════════════════════════════════════════
 
-T33  AS-3 Cash Flow Statement. [HIGH]
+T45  AS-3 Cash Flow Statement — existence. [HIGH]
      TRIGGER  : Company is NOT an OPC / Small Company / Dormant Company.
      FAIL IF  : Cash Flow Statement is missing, OR direct/indirect method is mixed inconsistently, OR cash & cash equivalents are not reconciled to the Balance Sheet.
 
-T34  AS-15(R) actuarial disclosures. [HIGH]
+T46  AS-15(R) actuarial disclosures. [HIGH]
      TRIGGER  : Gratuity, leave encashment, or other defined benefit obligation appears.
      FAIL IF  : Any of these is missing — actuarial assumption table (discount rate, salary escalation, attrition, mortality table), DBO opening-to-closing reconciliation, plan asset reconciliation (if funded), expense recognised in P&L, current vs non-current bifurcation of net liability/asset.
 
-T35  AS-18 Related Party. [HIGH]
+T47  AS-18 Related Party — relationships, transactions, balances. [HIGH]
      TRIGGER  : The notes identify any related parties.
      FAIL IF  : List of relationships and parties is not given, OR transactions in summary by category and party are not given, OR year-end balances (receivable/payable) are not given, OR a blanket "as identified by management" statement substitutes for actual party names.
 
-T36  AS-22 Deferred tax — DTA prudence. [HIGH]
+T48  AS-22 Deferred tax — DTA prudence. [HIGH]
      TRIGGER  : Deferred Tax Asset is recognised AND brought-forward loss / unabsorbed depreciation exists.
      FAIL IF  : The note does NOT assert "virtual certainty supported by convincing evidence" of future taxable income (a higher bar than "reasonable certainty"), OR does not describe the convincing evidence, OR DTA on losses is recognised when only "reasonable certainty" is asserted.
 
-T37  AS-20 EPS. [MEDIUM]
+T49  AS-20 EPS. [MEDIUM]
      FAIL IF  : Both Basic and Diluted EPS are not disclosed on the face of the P&L, OR face value of equity share, weighted-average number of shares, and reconciliation of numerator (net profit attributable to equity shareholders) are not in the notes.
 
-T38  AS-29 Provisions, Contingent Liabilities, Capital Commitments. [HIGH]
+T50  AS-29 Provisions, Contingent Liabilities, Capital Commitments. [HIGH]
      FAIL IF  : Contingent liabilities note is missing, OR estimated amounts of contracts remaining to be executed on capital account and not provided for is missing, OR provisions movement (opening/additions/utilised/reversed/closing) for non-routine provisions is missing.
 
-T39  AS-2 Inventory valuation policy. [MEDIUM]
+T51  AS-2 Inventory valuation policy. [MEDIUM]
      TRIGGER  : Inventories > 0.
      FAIL IF  : The accounting policy does not state the cost formula (FIFO / Weighted Average / Specific identification) AND the basis (lower of cost or net realisable value).
 
-T40  AS-16 Borrowing costs. [MEDIUM]
+T52  AS-16 Borrowing costs. [MEDIUM]
      TRIGGER  : Capital Work-in-Progress > 0 OR borrowings exist alongside qualifying assets.
      FAIL IF  : Amount of borrowing costs capitalised on qualifying assets during the year, and the capitalisation rate used, are not disclosed.
+
+T53  AS-3 Cash Flow Statement — classification quality. [HIGH]
+     TRIGGER  : Cash Flow Statement is presented.
+     FAIL IF  : Any of these — (a) Capital advances (advances for acquisition of PPE / intangibles) are classified under Operating activities (they belong under Investing); OR (b) Proceeds from borrowings and Repayment of borrowings are netted on the face of the CFS (they must be shown gross even when from the same lender); OR (c) Interest accrued but not paid is included within "Changes in working capital" (it is a non-cash add-back, not a working-capital change); OR (d) Difference in foreign exchange on EEFC accounts is not separately reconciled at the bottom of the CFS.
+
+T54  AS-18 Related Party — Parent name + outstanding balances always. [MEDIUM]
+     TRIGGER  : The Company has a parent / ultimate parent / Key Managerial Personnel.
+     FAIL IF  : Name of the Parent and (where applicable) Ultimate Parent / Next Most Senior Parent is not disclosed even where there have been no transactions during the year; OR balances outstanding at year-end with each related-party category are not separately disclosed alongside the transaction amounts during the year.
 
 ════════════════════════════════════════════
 SECTION E — COMPANIES ACT / OTHER STATUTES [MEDIUM]
 ════════════════════════════════════════════
 
-T41  MSMED Act 2006 — Section 22 verbatim six-clause disclosure.
+T55  MSMED Act 2006 — Section 22 verbatim six-clause disclosure.
      FAIL IF  : Any of these is missing — (a) principal amount and (b) interest due thereon remaining unpaid to MSME suppliers; (c) interest paid under Sec 16 read with payments made beyond appointed day; (d) interest due and payable for delay; (e) interest accrued and remaining unpaid at year-end; (f) further interest remaining due in succeeding years until actually paid.
 
-T42  Forex Earnings & Outgo — Sec 134(3)(m) read with Rule 8 Companies (Accounts) Rules 2014.
+T56  Forex Earnings & Outgo — Sec 134(3)(m) read with Rule 8 Companies (Accounts) Rules 2014.
      TRIGGER  : The Company is not a One-Person Company / Small Company / specified exempt entity.
      FAIL IF  : Earnings in foreign currency and Expenditure in foreign currency are not disclosed in the notes for inclusion in the Board's Report.
 
-T43  Auditor's remuneration disaggregation.
-     FAIL IF  : Auditor's remuneration is shown as a single line without disaggregation into — Statutory audit fee / Tax audit fee / Other services / Reimbursement of out-of-pocket expenses / GST or Service tax.
-
-T44  CSR — Sec 135.
+T57  CSR — Sec 135, including ongoing-project bifurcation. [MEDIUM]
      TRIGGER  : Average Net Profit (3 years) ≥ Rs 5 crore OR Net Worth ≥ Rs 500 crore OR Turnover ≥ Rs 1,000 crore.
-     FAIL IF  : Any of the prescribed CSR disclosures is missing — amount required to be spent, amount spent during the year (in cash / yet to be paid), shortfall, total of previous years' shortfall, reason for shortfall, nature of CSR activities, contribution to a related-party trust, where ongoing project — amount transferred to "Unspent CSR Account" within 30 days of FY-end.
+     FAIL IF  : Any of the prescribed CSR disclosures is missing — (a) amount required to be spent; (b) amount spent during the year split into "in cash" and "yet to be paid in cash"; (c) shortfall at end of year; (d) total of previous years' shortfall; (e) reason for shortfall; (f) nature of CSR activities; (g) details of related-party transactions in CSR (contribution to a trust controlled by the Company); (h) where the Company has a CSR liability provision, the movement in provision during the year is not shown separately; (i) where there is an ongoing project, amount transferred to the "Unspent CSR Account" within 30 days of FY-end is not disclosed; (j) the disclosure is not split into "ongoing projects" vs "other than ongoing projects".
 
-T45  Dividend disclosure. [LOW]
+T58  Dividend disclosure. [LOW]
      TRIGGER  : Dividend has been proposed or declared.
      FAIL IF  : Proposed dividend is provided as a liability instead of being disclosed only in the notes (post-revision to AS-4 effective FY 2016-17), OR arrears of fixed cumulative dividend on preference shares are not disclosed.
 
-T46  Note 1 (Corporate Information) and Note 2 (Significant Accounting Policies). [MEDIUM]
-     FAIL IF  : Note 1 is missing or does not state the registered office, nature of business, and CIN; OR Note 2 is missing any of these policies that are relevant to the company — basis of preparation, revenue recognition, depreciation method and rates (with WDV/SLM), foreign currency, employee benefits, leases, taxation, inventories, borrowing costs, impairment, provisions/contingent liabilities, earnings per share.
+T59  Note 1 — Corporate Information. [MEDIUM]
+     FAIL IF  : Note 1 is missing or does not state the registered office, nature of business, and CIN.
+
+T60  Note 2 — Significant Accounting Policies presence. [MEDIUM]
+     FAIL IF  : Note 2 is missing any of these policies that are relevant to the company — basis of preparation, revenue recognition, depreciation method and rates (with WDV/SLM), foreign currency, employee benefits, leases, taxation, inventories, borrowing costs, impairment, provisions/contingent liabilities, earnings per share.
+
+════════════════════════════════════════════
+SECTION F — P&L DISCLOSURE SUB-CLASSIFICATION [HIGH / MEDIUM]
+════════════════════════════════════════════
+
+T61  Revenue from operations — three-way bifurcation. [HIGH]
+     TRIGGER  : Revenue from Operations > 0.
+     FAIL IF  : Revenue from Operations is not bifurcated on the face of the P&L (or in the immediate note) into (a) Sale of products, (b) Sale of services, and (c) Other operating revenues, with comparatives. (For Section 8 companies — Grants or Donations received in addition.)
+
+T62  Other Income — sub-classification. [MEDIUM]
+     TRIGGER  : Other Income > 0.
+     FAIL IF  : Other Income is not sub-classified into Interest income / Dividend income / Net gain on sale of investments / Net gain on foreign currency transactions and translation / Other non-operating income.
+
+T63  Cost of Materials Consumed — opening + purchases − closing. [MEDIUM]
+     TRIGGER  : Cost of Materials Consumed > 0 OR the Company is engaged in manufacturing.
+     FAIL IF  : The cost-of-materials-consumed calculation showing Opening Stock + Purchases − Closing Stock is not presented in the relevant note.
+
+T64  Changes in inventories — by category. [MEDIUM]
+     TRIGGER  : Inventories > 0 AND the Company carries inventories of more than one type.
+     FAIL IF  : Changes in inventories are not separately disclosed for Finished Goods, Work-in-Progress, and Stock-in-trade.
+
+T65  Employee Benefits Expense — sub-split. [HIGH]
+     TRIGGER  : Employee Benefits Expense > 0.
+     FAIL IF  : Employee Benefits Expense is not sub-classified into (a) Salaries and wages; (b) Contribution to Provident and other funds; (c) Expense on Employee Stock Option Scheme or Employee Stock Purchase Plan (where applicable); (d) Staff welfare expenses.
+
+T66  Finance Costs — sub-split. [HIGH]
+     TRIGGER  : Finance Costs > 0.
+     FAIL IF  : Finance Costs are not sub-classified into (a) Interest expense; (b) Other borrowing costs; (c) Applicable net gain or loss on foreign currency transactions and translation to the extent regarded as an adjustment to interest cost.
+
+T67  Other Expenses — itemisation per Sch III materiality threshold. [HIGH]
+     TRIGGER  : Other Expenses > 0.
+     FAIL IF  : Any item of expenditure within "Other Expenses" that exceeds 1% of revenue from operations OR Rs 1,00,000, whichever is higher, is not separately disclosed by nature.
+
+T68  Exceptional / Extraordinary / Prior-period items — separate disclosure. [MEDIUM]
+     TRIGGER  : Statement of Profit & Loss is presented.
+     FAIL IF  : Where exceptional items, extraordinary items, or prior-period items exist, they are not presented on separate lines on the face of the P&L with a descriptive note.
+
+T69  Auditor's remuneration — six sub-categories per Sch III. [MEDIUM]
+     TRIGGER  : Auditor's remuneration appears in the notes.
+     FAIL IF  : Auditor's remuneration is not disaggregated into the Sch III mandated categories — (a) as auditor; (b) for taxation matters; (c) for company law matters; (d) for management services; (e) for other services; (f) for reimbursement of expenses. (Plus GST / service tax where separately charged.)
 
 ════════════════════════════════════════════
 FINAL SELF-REVIEW PASS — perform before returning the JSON:
@@ -291,59 +393,101 @@ FINAL SELF-REVIEW PASS — perform before returning the JSON:
 ════════════════════════════════════════════`;
 
 // ============================================================
-// NOTES_DRAFT_PROMPT — given a filtered list of Schedule III HIGH/MEDIUM
-// disclosure-missing issues, draft proper Schedule III-compliant note text
-// that the preparer can paste into the financial statements.
+// NOTES_DRAFT_PROMPT — produce ONE comprehensive "Significant Accounting
+// Policies" note (Note 2) tailored to the engagement. The note walks
+// every line that the balance sheet / P&L of this company actually carries
+// (driven by keyMetrics + the issues list, so we know what's present and
+// what's missing). Output is a single block of Schedule III-compliant prose
+// that the reviewer can edit before pasting into the financial statements.
 // ============================================================
 export const NOTES_DRAFT_PROMPT = (issues, company, metrics) => {
-  const issueLines = issues.map((iss, idx) =>
+  const issueLines = (issues || []).map((iss, idx) =>
     `${idx + 1}. [${iss.id || '—'}] ${iss.title}\n` +
     `   Observation: ${iss.observation}\n` +
     (iss.noteRef ? `   Reference: ${iss.noteRef}\n` : '') +
     (iss.recommendation ? `   Recommendation: ${iss.recommendation}\n` : '')
   ).join('\n');
 
-  return `You are a senior Indian Chartered Accountant drafting Notes to the Financial Statements for ${company?.name || 'the Company'} (CIN: ${company?.cin || '—'}, FY ending ${company?.yearEnd || '—'}, nature: ${company?.natureOfBusiness || '—'}).
+  return `You are a senior Indian Chartered Accountant drafting the "Significant Accounting Policies" note (typically Note 2) to be inserted into the Notes to the Financial Statements of ${company?.name || 'the Company'} (CIN: ${company?.cin || '—'}, FY ending ${company?.yearEnd || '—'}, nature: ${company?.natureOfBusiness || '—'}).
 
-CONTEXT — key financial metrics (Rs in lakhs):
-- Revenue from operations: ${(metrics?.revenueLakhs ?? 0).toFixed(2)}
-- Profit before tax: ${(metrics?.profitBeforeTaxLakhs ?? 0).toFixed(2)}
-- Total borrowings: ${(metrics?.totalBorrowingsLakhs ?? 0).toFixed(2)}
-- Paid-up capital: ${(metrics?.paidUpCapitalLakhs ?? 0).toFixed(2)}
-- Reserves & surplus: ${(metrics?.reservesLakhs ?? 0).toFixed(2)}
-- Trade receivables: ${(metrics?.tradeReceivablesLakhs ?? 0).toFixed(2)}
-- Fixed assets / PPE: ${(metrics?.fixedAssetsLakhs ?? 0).toFixed(2)}
-- Total assets: ${(metrics?.totalAssetsLakhs ?? 0).toFixed(2)}
-- Average net profit (3 yrs): ${(metrics?.averageNetProfit3YearsLakhs ?? 0).toFixed(2)}
-- Net worth: ${(metrics?.netWorthLakhs ?? 0).toFixed(2)}
+CONTEXT — engagement key facts:
+- Revenue from operations: Rs ${(metrics?.revenueLakhs ?? 0).toFixed(2)} lakhs
+- Profit before tax: Rs ${(metrics?.profitBeforeTaxLakhs ?? 0).toFixed(2)} lakhs
+- Total borrowings: Rs ${(metrics?.totalBorrowingsLakhs ?? 0).toFixed(2)} lakhs
+- Paid-up capital + Reserves: Rs ${((metrics?.paidUpCapitalLakhs ?? 0) + (metrics?.reservesLakhs ?? 0)).toFixed(2)} lakhs
+- Trade receivables: Rs ${(metrics?.tradeReceivablesLakhs ?? 0).toFixed(2)} lakhs
+- Fixed assets / PPE: Rs ${(metrics?.fixedAssetsLakhs ?? 0).toFixed(2)} lakhs
+- Total assets: Rs ${(metrics?.totalAssetsLakhs ?? 0).toFixed(2)} lakhs
+- Net worth: Rs ${(metrics?.netWorthLakhs ?? 0).toFixed(2)} lakhs
 
-TASK — for each of the issues below, draft a complete Note to the Financial Statements in proper Schedule III Division I (AS basis) wording. Use Indian accounting and legal phrasing as found in published audited financial statements of comparable Indian companies. Where company-specific figures are unknown, use the placeholder [XX] and bold it so the preparer can fill in.
+ISSUES FLAGGED IN THE SCHEDULE III REVIEW (use these to infer which policies are likely missing or weakest in the existing financial statements — give those sub-headings extra rigor):
+${issueLines || '(no specific issues flagged — produce a complete standard policy note)'}
 
-ISSUES TO DRAFT NOTES FOR:
-${issueLines}
+TASK
+Produce a single comprehensive "Significant Accounting Policies" note suitable for the Notes to the Financial Statements of an Indian private/unlisted company reporting under Schedule III, Division I (Accounting Standards basis). Walk every balance sheet head and P&L head that is likely relevant to this company based on the key facts above. For each sub-policy, give a clean professional draft a CA in India would actually publish, citing the relevant AS where the AS materially shapes the policy. The output is ONE comprehensive note, NOT several separate notes.
 
-DRAFTING RULES:
-- Use the standard Schedule III note title (e.g., "Disclosure under Section 22 of the Micro, Small and Medium Enterprises Development Act, 2006", "Trade Receivables — Ageing Schedule", "Ratios — Section 13 of General Instructions for Preparation of Balance Sheet").
-- Include both the qualitative narrative AND the tabular disclosure structure where applicable (use plain-text tables with pipe delimiters that the preparer can recreate in Word).
-- Include comparatives column for prior year — mark "(Previous year: Rs [XX] lakhs)" or similar.
-- For tabular disclosures (ageing schedules, ratios, etc.), provide the full table skeleton with headers and row labels — the preparer fills the cells.
-- Cite the exact paragraph reference inside the note text where helpful (e.g., "as required by paragraph 6(L)(xi) of the General Instructions for Preparation of Balance Sheet under Schedule III").
-- For affirmative-statement disclosures (no Benami proceedings, not a wilful defaulter, no crypto, no struck-off relationships), draft the affirmative statement, not a placeholder.
-- Use Rupees in lakhs / crores consistent with the company's other notes.
+SUB-POLICIES TO COVER (omit any that are clearly inapplicable to this company; expand the rest):
 
-Return ONLY valid JSON (no markdown, no commentary):
+  2.1 Basis of preparation
+       (Compliance with applicable AS notified under Section 133, historical-cost convention, accrual basis, going concern.)
+  2.2 Use of estimates (AS-1 / general)
+  2.3 Property, Plant & Equipment (AS-10)
+       — recognition, initial measurement, subsequent measurement, depreciation method
+         (WDV / SLM) and useful lives as per Schedule II of the Companies Act 2013, derecognition.
+  2.4 Capital work-in-progress
+  2.5 Intangible assets (AS-26) — applicable only if relevant.
+  2.6 Impairment of assets (AS-28)
+  2.7 Inventories (AS-2)
+       — only if inventories > 0; specify the cost formula (FIFO / Weighted Avg) and basis "lower of cost and net realisable value".
+  2.8 Investments (AS-13)
+       — current at lower of cost or fair value; long-term at cost less other-than-temporary diminution.
+  2.9 Cash and cash equivalents (AS-3)
+       — definition aligned to AS-3.
+  2.10 Revenue recognition (AS-9)
+       — split by income stream (sale of goods, services, interest, dividend, royalty, etc.).
+  2.11 Foreign currency transactions (AS-11)
+       — initial recognition, monetary items at closing rate, exchange differences treatment.
+  2.12 Employee benefits (AS-15 Revised)
+       — short-term benefits, defined contribution plans (PF, ESI, NPS), defined benefit (gratuity) actuarial valuation, leave encashment policy.
+  2.13 Borrowing costs (AS-16)
+       — only if PPE additions / CWIP exist.
+  2.14 Leases (AS-19)
+       — distinguish operating vs finance lease accounting.
+  2.15 Earnings per share (AS-20)
+  2.16 Taxes on income (AS-22)
+       — current tax computation basis; deferred tax recognition, including the "virtual certainty supported by convincing evidence" standard for DTA on carry-forward losses / unabsorbed depreciation.
+  2.17 Provisions, contingent liabilities and contingent assets (AS-29)
+  2.18 Cash flow statement (AS-3) — only if CFS is presented.
+  2.19 Related party transactions (AS-18) — disclosure policy.
+  2.20 Segment reporting (AS-17) — only if multiple segments.
+
+DRAFTING RULES
+- The output is ONE single note containing all sub-policies under sub-headings 2.1, 2.2, 2.3 … in sequence.
+- Use professional Indian audit-firm phrasing. Avoid hedging like "may", "could be" — write declarative policy statements.
+- Cite the AS number in brackets at the end of each sub-heading: e.g., "2.10 Revenue recognition (AS-9)".
+- Where a specific value/policy choice depends on the company (depreciation method, cost formula for inventory, useful lives override of Schedule II), use a placeholder in [BRACKETED CAPS] for the preparer to fill in. Examples: [WDV / SLM — strike one], [FIFO / Weighted Average — specify], [USEFUL_LIVES_AS_PER_SCH_II_OR_OVERRIDE].
+- For sub-policies that are clearly NOT applicable to this company (e.g., intangibles when no intangibles exist; segment reporting for a single-segment private co), include the sub-heading and say "Not applicable to the Company during the year."
+- Do NOT invent specific rupee figures — those come from the rest of the financial statements.
+- Do NOT include the company name as a header; the preparer will paste this under "Note 2 — Significant Accounting Policies" themselves.
+
+OUTPUT FORMAT — return ONLY valid JSON (no markdown fences, no commentary):
 
 {
-  "draftedNotes": [
-    {
-      "issueId":   "T18",
-      "noteTitle": "Trade Receivables — Ageing Schedule (Para 6(L)(xviii) of Sch III, Div I)",
-      "noteText":  "The ageing of Trade Receivables is set out below in accordance with paragraph 6(L)(xviii) of the General Instructions for Preparation of Balance Sheet:\\n\\n| Particulars | Less than 6 months | 6 months – 1 year | 1 – 2 years | 2 – 3 years | More than 3 years | Total |\\n|---|---|---|---|---|---|---|\\n| (i) Undisputed Trade Receivables — considered good | [XX] | [XX] | [XX] | [XX] | [XX] | [XX] |\\n| ...etc... |\\n\\nThere are no disputed receivables as at the year end. (Previous year: nil.)"
-    }
-  ]
+  "accountingPolicies": {
+    "noteTitle": "Note 2 — Significant Accounting Policies",
+    "introText": "The significant accounting policies adopted by the Company in the preparation and presentation of these financial statements are set out below. These policies have been consistently applied to all the years presented unless otherwise stated.",
+    "subPolicies": [
+      {
+        "heading": "2.1 Basis of preparation",
+        "body":    "The financial statements of the Company have been prepared in accordance with the Generally Accepted Accounting Principles in India (Indian GAAP) to comply with the Accounting Standards specified under Section 133 of the Companies Act, 2013, read with Rule 7 of the Companies (Accounts) Rules, 2014 (as amended) and the relevant provisions of the Companies Act, 2013. The financial statements have been prepared on accrual basis under the historical cost convention. The accounting policies adopted in the preparation of the financial statements are consistent with those followed in the previous year, except as disclosed otherwise. The Company has ascertained its operating cycle as 12 months for the purpose of current / non-current classification of assets and liabilities."
+      },
+      { "heading": "2.2 Use of estimates", "body": "..." },
+      { "heading": "2.3 Property, Plant and Equipment (AS-10)", "body": "..." }
+    ]
+  }
 }
 
-Order the drafted notes by the same severity ordering as the issues. If an issue is not a disclosure-missing type (e.g., it is a computational error or classification dispute), skip it — do not invent a "note" for it. Use \\n for line breaks inside noteText.`;
+Return up to 20 sub-policies. Each body should be a complete prose paragraph of 40–120 words. No \\n needed inside body — use a single string.`;
 };
 
 // CARO_PROMPT is a function that embeds key metrics into the prompt.

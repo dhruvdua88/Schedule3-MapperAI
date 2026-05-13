@@ -1,12 +1,15 @@
 // ============ AUDIT REPORT TAB ============
 // SA 700 (Revised) compliant Independent Auditor's Report builder.
-// Handles CARO Annexure A and IFCoFR Annexure B applicability.
+// Each Rule 11 clause now has a "Scenario" dropdown drawing from
+// rule11Wording.js — pick the variant that fits the engagement, then
+// fine-tune the text before generating the Word report.
 
 import React from 'react';
 import {
-  ShieldCheck, FileCheck2, Stamp, Edit3, Download, Check,
+  ShieldCheck, FileCheck2, Stamp, Edit3, Download, Check, RefreshCcw,
 } from 'lucide-react';
-import { COLORS, FONTS, BTN_PRIMARY } from '../styles/tokens.js';
+import { COLORS, FONTS, BTN_PRIMARY, BTN_GHOST } from '../styles/tokens.js';
+import { RULE_11_WORDING } from '../data/rule11Wording.js';
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
@@ -32,7 +35,7 @@ function SectionCard({ icon: Icon, title, subtitle, children, accent }) {
   return (
     <div style={{
       background: '#fffdf7',
-      border: accent ? `1px solid #e8e1d2` : `1px solid #e8e1d2`,
+      border: `1px solid #e8e1d2`,
       borderLeft: accent ? `3px solid ${accent}` : `1px solid #e8e1d2`,
       borderRadius: 10, padding: 20, marginBottom: 18,
     }}>
@@ -74,38 +77,80 @@ function InputField({ label, value, onChange, type = 'text', mono = false, place
   );
 }
 
-function Rule11Item({ letter, label, value, onChange, readOnly, reviewed, onToggleReview, extra }) {
+// ── Rule 11 item with scenario dropdown + inline edit ────────────────────────
+function Rule11Item({
+  letter, label, value, onChange, reviewed, onToggleReview,
+  variants, selectedVariantId, onPickVariant, extra,
+}) {
   return (
     <div style={{
       borderTop: `1px solid #f0ead8`, paddingTop: 14, marginTop: 14,
       display: 'grid', gridTemplateColumns: '1fr auto', gap: 14, alignItems: 'flex-start',
     }}>
-      <div>
+      <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.PRIMARY, marginBottom: 6 }}>
           <span className="mono" style={{ marginRight: 6 }}>{letter}</span>
           {label}
         </div>
         {extra && <div style={{ marginBottom: 10 }}>{extra}</div>}
-        {readOnly ? (
+
+        {/* Scenario dropdown */}
+        {variants && variants.length > 0 && (
           <div style={{
-            fontSize: 12, color: COLORS.TEXT_MUTED, fontStyle: 'italic', lineHeight: 1.5,
-            padding: '8px 10px', background: '#fbf8ed', borderRadius: 5, border: '1px dashed #d4cab4',
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap',
           }}>
-            {value}
+            <label style={{
+              fontSize: 10, color: COLORS.TEXT_MUTED, textTransform: 'uppercase',
+              letterSpacing: '0.06em', fontWeight: 600,
+            }}>
+              Scenario
+            </label>
+            <select
+              value={selectedVariantId || ''}
+              onChange={(e) => {
+                const id = e.target.value;
+                const v = variants.find((x) => x.id === id);
+                if (v) onPickVariant?.(v);
+              }}
+              style={{
+                flex: '1 1 240px', minWidth: 200,
+                padding: '6px 9px', fontSize: 12, fontFamily: FONTS.BODY,
+                border: `1px solid ${COLORS.BORDER_STRONG}`, borderRadius: 5,
+                background: COLORS.BG_CREAM, color: COLORS.TEXT, outline: 'none',
+              }}
+            >
+              <option value="" disabled>— pick a standard variant —</option>
+              {variants.map((v) => (
+                <option key={v.id} value={v.id}>{v.label}</option>
+              ))}
+            </select>
+            {selectedVariantId && (
+              <button
+                onClick={() => {
+                  const v = variants.find((x) => x.id === selectedVariantId);
+                  if (v) onChange?.(v.text);
+                }}
+                title="Reset text to the standard wording for the selected scenario"
+                style={{ ...BTN_GHOST, fontSize: 10, padding: '4px 9px', gap: 4 }}
+              >
+                <RefreshCcw size={11} /> Reset
+              </button>
+            )}
           </div>
-        ) : (
-          <textarea
-            value={value || ''}
-            onChange={(e) => onChange?.(e.target.value)}
-            rows={3}
-            style={{
-              width: '100%', padding: '8px 10px',
-              background: '#fef9f1', border: `1px solid ${COLORS.BORDER_STRONG}`,
-              borderRadius: 5, fontSize: 12, fontFamily: FONTS.BODY,
-              color: COLORS.TEXT, lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box',
-            }}
-          />
         )}
+
+        <textarea
+          value={value || ''}
+          onChange={(e) => onChange?.(e.target.value)}
+          rows={Math.min(12, Math.max(4, ((value || '').split('\n').length + 1)))}
+          style={{
+            width: '100%', padding: '8px 10px',
+            background: '#fef9f1', border: `1px solid ${COLORS.BORDER_STRONG}`,
+            borderRadius: 5, fontSize: 12, fontFamily: FONTS.BODY,
+            color: COLORS.TEXT, lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box',
+            whiteSpace: 'pre-wrap',
+          }}
+        />
       </div>
       <button
         onClick={onToggleReview}
@@ -134,6 +179,36 @@ export function AuditReportTab({ analysis, caro, reportFields: rf, setReportFiel
 
   const update       = (key, val) => setReportFields({ ...rf, [key]: val });
   const toggleReview = (k) => setReportFields({ ...rf, reviewed: { ...rf.reviewed, [k]: !rf.reviewed[k] } });
+
+  // Helper — pick a variant + update both the text field and the chosen-variant tracker.
+  // The "chosen variant" is purely UI state to keep the dropdown selection sticky;
+  // we stash it under rf.scenario.<key> so it survives saves.
+  const pickVariant = (clauseKey, fieldKey, variant) => {
+    setReportFields({
+      ...rf,
+      [fieldKey]: variant.text,
+      scenario: { ...(rf.scenario || {}), [clauseKey]: variant.id },
+    });
+  };
+  const selectedVariant = (k) => rf.scenario?.[k] || null;
+
+  // ── 11(g) needs a software-aware default. If the user picks the "throughout"
+  //    variant we substitute the software name into the [SOFTWARE] token.
+  const applyG = (variant) => {
+    const filled = (variant.text || '').replaceAll('[SOFTWARE]', rf.accountingSoftware || '[SOFTWARE]');
+    setReportFields({
+      ...rf,
+      rule11g_text: filled,
+      scenario: { ...(rf.scenario || {}), g: variant.id },
+    });
+  };
+  const applyE = (variant) => {
+    setReportFields({
+      ...rf,
+      rule11e_text: variant.text,
+      scenario: { ...(rf.scenario || {}), e: variant.id },
+    });
+  };
 
   return (
     <div className="fade-in">
@@ -171,11 +246,11 @@ export function AuditReportTab({ analysis, caro, reportFields: rf, setReportFiel
         </div>
       </SectionCard>
 
-      {/* Rule 11 disclosures */}
+      {/* Rule 11 disclosures with scenario dropdowns */}
       <SectionCard
         icon={Edit3}
         title="Rule 11 disclosures"
-        subtitle="Clean defaults shown — review each item and confirm before generating"
+        subtitle="Pick a scenario for each clause to load the standard ICAI wording, then edit as needed. Confirm reviewed before generating."
         accent={!allReviewed ? COLORS.HIGH : '#3e6034'}
       >
         <Rule11Item
@@ -184,6 +259,9 @@ export function AuditReportTab({ analysis, caro, reportFields: rf, setReportFiel
           onChange={(v) => update('rule11a_litigation', v)}
           reviewed={rf.reviewed?.a}
           onToggleReview={() => toggleReview('a')}
+          variants={RULE_11_WORDING.a}
+          selectedVariantId={selectedVariant('a')}
+          onPickVariant={(v) => pickVariant('a', 'rule11a_litigation', v)}
         />
         <Rule11Item
           letter="(b)" label="Long-term contracts incl. derivatives [Rule 11(b)]"
@@ -191,6 +269,9 @@ export function AuditReportTab({ analysis, caro, reportFields: rf, setReportFiel
           onChange={(v) => update('rule11b_longTermContracts', v)}
           reviewed={rf.reviewed?.b}
           onToggleReview={() => toggleReview('b')}
+          variants={RULE_11_WORDING.b}
+          selectedVariantId={selectedVariant('b')}
+          onPickVariant={(v) => pickVariant('b', 'rule11b_longTermContracts', v)}
         />
         <Rule11Item
           letter="(c)" label="Investor Education and Protection Fund [Rule 11(c)]"
@@ -198,13 +279,19 @@ export function AuditReportTab({ analysis, caro, reportFields: rf, setReportFiel
           onChange={(v) => update('rule11c_iepf', v)}
           reviewed={rf.reviewed?.c}
           onToggleReview={() => toggleReview('c')}
+          variants={RULE_11_WORDING.c}
+          selectedVariantId={selectedVariant('c')}
+          onPickVariant={(v) => pickVariant('c', 'rule11c_iepf', v)}
         />
         <Rule11Item
-          letter="(e)" label="Ultimate Beneficiary [Rule 11(e)] — three-part standard wording"
-          value="Standard three-part Ultimate Beneficiary representation (auto-included with funds advanced + funds received + audit-procedure conclusion). Edit only if material exceptions exist."
-          readOnly
+          letter="(e)" label="Ultimate Beneficiary [Rule 11(e)] — three-part representation"
+          value={rf.rule11e_text || RULE_11_WORDING.e[0].text}
+          onChange={(v) => update('rule11e_text', v)}
           reviewed={rf.reviewed?.e}
           onToggleReview={() => toggleReview('e')}
+          variants={RULE_11_WORDING.e}
+          selectedVariantId={selectedVariant('e') || RULE_11_WORDING.e[0].id}
+          onPickVariant={applyE}
         />
         <Rule11Item
           letter="(f)" label="Dividend declared/paid u/s 123 [Rule 11(f)]"
@@ -212,16 +299,26 @@ export function AuditReportTab({ analysis, caro, reportFields: rf, setReportFiel
           onChange={(v) => update('rule11f_dividend', v)}
           reviewed={rf.reviewed?.f}
           onToggleReview={() => toggleReview('f')}
+          variants={RULE_11_WORDING.f}
+          selectedVariantId={selectedVariant('f')}
+          onPickVariant={(v) => pickVariant('f', 'rule11f_dividend', v)}
         />
         <Rule11Item
-          letter="(g)" label="Audit trail / accounting software [Rule 11(g)] — per ICAI Implementation Guide Revised 2024"
+          letter="(g)" label="Audit trail / accounting software [Rule 11(g)] — ICAI Impl. Guide (Rev. 2024)"
           extra={
-            <InputField label="Accounting software name" value={rf.accountingSoftware} onChange={(v) => update('accountingSoftware', v)} />
+            <InputField
+              label="Accounting software name [SOFTWARE] token in the dropdown will be replaced with this"
+              value={rf.accountingSoftware}
+              onChange={(v) => update('accountingSoftware', v)}
+            />
           }
-          value="Standard unmodified wording: software has audit-trail feature, operated throughout the year, no tampering observed. Edit the software name above; modify clause only on adverse finding."
-          readOnly
+          value={rf.rule11g_text || (RULE_11_WORDING.g[0].text || '').replaceAll('[SOFTWARE]', rf.accountingSoftware || '[SOFTWARE]')}
+          onChange={(v) => update('rule11g_text', v)}
           reviewed={rf.reviewed?.g}
           onToggleReview={() => toggleReview('g')}
+          variants={RULE_11_WORDING.g}
+          selectedVariantId={selectedVariant('g') || RULE_11_WORDING.g[0].id}
+          onPickVariant={applyG}
         />
       </SectionCard>
 

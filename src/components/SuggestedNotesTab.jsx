@@ -1,27 +1,36 @@
-// ============ SUGGESTED NOTES TAB ============
-// Shows AI-drafted note text for each missing-disclosure issue.
-// Reviewer can copy individual notes to clipboard or download the whole
-// pack as a Word document for the preparer.
+// ============ SUGGESTED ACCOUNTING POLICIES TAB ============
+// Drafts ONE comprehensive "Significant Accounting Policies" note
+// (Note 2) — the reviewer can edit each sub-policy in place and download
+// the result as a Word document for the preparer to paste into the FS.
 
-import React, { useState } from 'react';
-import { FileSignature, Copy, Check, Download, Loader2, FilePlus2, AlertCircle, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import {
+  FileSignature, Copy, Check, Download, Loader2, FilePlus2, AlertCircle, X, Edit3,
+} from 'lucide-react';
 import { COLORS, FONTS, BTN_PRIMARY, BTN_GHOST } from '../styles/tokens.js';
 
 export function SuggestedNotesTab({
-  draftedNotes, generating, progress, onGenerate, onCancel, onDownloadWord, eligibleIssueCount,
+  draftedPolicy,            // { noteTitle, introText, subPolicies: [{heading, body}] } | null
+  generating,
+  progress,                 // {current,total} — only meaningful in degenerate batched mode
+  onGenerate,
+  onCancel,
+  onDownloadWord,
+  onUpdatePolicy,           // called with the full updated draftedPolicy when reviewer edits
+  hasAnalysis,              // bool — true if there's an analysis to base the policy on
 }) {
-  const [copiedId, setCopiedId] = useState(null);
+  const [copiedHeading, setCopiedHeading] = useState(null);
 
-  const copy = async (note) => {
+  const copy = async (heading, body) => {
     try {
-      await navigator.clipboard.writeText(`${note.noteTitle}\n\n${note.noteText}`);
-      setCopiedId(note.issueId);
-      setTimeout(() => setCopiedId(null), 1800);
+      await navigator.clipboard.writeText(`${heading}\n\n${body}`);
+      setCopiedHeading(heading);
+      setTimeout(() => setCopiedHeading(null), 1800);
     } catch { /* clipboard denied */ }
   };
 
-  // Empty / first-run state
-  if (!draftedNotes || draftedNotes.length === 0) {
+  // ── Empty / first-run state ──
+  if (!draftedPolicy) {
     return (
       <div className="fade-in">
         <div className="card" style={{
@@ -38,36 +47,53 @@ export function SuggestedNotesTab({
             <FilePlus2 size={24} color={COLORS.TEXT_MUTED} strokeWidth={1.5} />
           </div>
           <h3 className="serif" style={{ fontSize: 22, fontWeight: 600, color: COLORS.TEXT, marginBottom: 8 }}>
-            Draft the missing disclosures
+            Draft the Significant Accounting Policies note
           </h3>
-          <p style={{ fontSize: 13, color: COLORS.TEXT_MUTED, maxWidth: 520, margin: '0 auto 22px', lineHeight: 1.55 }}>
-            {eligibleIssueCount > 0
-              ? `${eligibleIssueCount} disclosure-missing issue${eligibleIssueCount === 1 ? '' : 's'} from this engagement can be auto-drafted into Schedule III-compliant note text. The preparer can paste these directly into the financial statements.`
-              : 'No disclosure-missing issues were flagged in this engagement, so there is nothing to draft.'}
+          <p style={{ fontSize: 13, color: COLORS.TEXT_MUTED, maxWidth: 540, margin: '0 auto 22px', lineHeight: 1.55 }}>
+            One comprehensive "Note 2 — Significant Accounting Policies" drafted in standard Schedule III wording, walking every balance-sheet head relevant to this engagement (PPE, inventories, employee benefits, taxation, leases, EPS, etc.). Each sub-policy is editable before you download.
           </p>
-          {eligibleIssueCount > 0 && !generating && (
+          {hasAnalysis && !generating && (
             <button
               onClick={onGenerate}
-              style={{
-                ...BTN_PRIMARY,
-                padding: '12px 26px', fontSize: 14,
-              }}
+              style={{ ...BTN_PRIMARY, padding: '12px 26px', fontSize: 14 }}
             >
-              <FileSignature size={15} /> Draft suggested notes
+              <FileSignature size={15} /> Draft accounting policies
             </button>
           )}
           {generating && (
-            <GeneratingBlock progress={progress} onCancel={onCancel} eligibleIssueCount={eligibleIssueCount} />
+            <GeneratingBlock progress={progress} onCancel={onCancel} />
           )}
           {!generating && (
             <p style={{ marginTop: 12, fontSize: 11, color: COLORS.TEXT_FAINT }}>
-              Drafting is batched into chunks of 6 issues. Typically ~30 seconds per batch. You can cancel any time.
+              Uses DeepSeek with the model selected for this engagement. Typically ~30–45 seconds.
             </p>
           )}
         </div>
       </div>
     );
   }
+
+  const { noteTitle, introText, subPolicies = [] } = draftedPolicy;
+
+  const updateField = (key, val) => {
+    onUpdatePolicy?.({ ...draftedPolicy, [key]: val });
+  };
+
+  const updateSubBody = (idx, val) => {
+    const next = subPolicies.map((p, i) => (i === idx ? { ...p, body: val } : p));
+    onUpdatePolicy?.({ ...draftedPolicy, subPolicies: next });
+  };
+  const updateSubHeading = (idx, val) => {
+    const next = subPolicies.map((p, i) => (i === idx ? { ...p, heading: val } : p));
+    onUpdatePolicy?.({ ...draftedPolicy, subPolicies: next });
+  };
+  const removeSub = (idx) => {
+    onUpdatePolicy?.({ ...draftedPolicy, subPolicies: subPolicies.filter((_, i) => i !== idx) });
+  };
+  const addSub = () => {
+    const next = [...subPolicies, { heading: `2.${subPolicies.length + 1} New sub-policy`, body: '' }];
+    onUpdatePolicy?.({ ...draftedPolicy, subPolicies: next });
+  };
 
   return (
     <div className="fade-in">
@@ -78,18 +104,13 @@ export function SuggestedNotesTab({
       }}>
         <div>
           <h3 className="serif" style={{ fontSize: 20, fontWeight: 600, color: COLORS.TEXT, margin: 0 }}>
-            {draftedNotes.length} drafted note{draftedNotes.length === 1 ? '' : 's'}
+            {subPolicies.length} sub-polic{subPolicies.length === 1 ? 'y' : 'ies'} drafted
           </h3>
           <p style={{ fontSize: 12, color: COLORS.TEXT_MUTED, marginTop: 4 }}>
-            Schedule III–compliant wording. Placeholders like [XX] are for company-specific figures.
+            Click any field to edit. Placeholders like [WDV / SLM] are for the preparer to choose.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {generating && progress && (
-            <span style={{ fontSize: 11, color: COLORS.TEXT_MUTED, marginRight: 4 }}>
-              Batch {Math.min(progress.current + 1, progress.total)} of {progress.total}…
-            </span>
-          )}
           {generating ? (
             <button onClick={onCancel} style={{ ...BTN_GHOST, fontSize: 12, color: COLORS.CRIT, borderColor: COLORS.CRIT }}>
               <X size={13} /> Cancel
@@ -105,54 +126,93 @@ export function SuggestedNotesTab({
         </div>
       </div>
 
-      {/* Notes list */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {draftedNotes.map((note, idx) => (
-          <article key={note.issueId || idx} style={{
-            background: '#fffdf7',
-            border: `1px solid ${COLORS.BORDER}`,
-            borderLeft: `4px solid ${COLORS.PRIMARY}`,
-            borderRadius: 8, padding: 18,
+      {/* Note title (editable) */}
+      <article style={{
+        background: '#fffdf7',
+        border: `1px solid ${COLORS.BORDER}`,
+        borderLeft: `4px solid ${COLORS.PRIMARY}`,
+        borderRadius: 8, padding: 20, marginBottom: 14,
+      }}>
+        <label style={smallLabel}>Note title</label>
+        <input
+          type="text"
+          value={noteTitle || ''}
+          onChange={(e) => updateField('noteTitle', e.target.value)}
+          style={{
+            ...editInput,
+            fontSize: 18, fontWeight: 600, fontFamily: FONTS.SERIF,
+            color: COLORS.TEXT,
+          }}
+        />
+        <div style={{ marginTop: 14 }}>
+          <label style={smallLabel}>Introductory paragraph</label>
+          <textarea
+            value={introText || ''}
+            onChange={(e) => updateField('introText', e.target.value)}
+            rows={3}
+            style={{ ...editInput, fontSize: 13, lineHeight: 1.55 }}
+          />
+        </div>
+      </article>
+
+      {/* Sub-policies */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {subPolicies.map((p, idx) => (
+          <article key={idx} style={{
+            background: '#fffdf7', border: `1px solid ${COLORS.BORDER}`,
+            borderRadius: 8, padding: 16,
           }}>
-            <header style={{
-              display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap',
-            }}>
-              {note.issueId && (
-                <span className="mono" style={{
-                  fontSize: 10, color: COLORS.PRIMARY,
-                  background: COLORS.BG_CREAM,
-                  border: `1px solid ${COLORS.BORDER}`,
-                  padding: '1px 6px', borderRadius: 3, fontWeight: 600,
-                }}>
-                  {note.issueId}
-                </span>
-              )}
-              <h4 className="serif" style={{
-                fontSize: 16, fontWeight: 600, lineHeight: 1.3, color: COLORS.TEXT, margin: 0, flex: 1, minWidth: 0,
-              }}>
-                {note.noteTitle}
-              </h4>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <input
+                type="text"
+                value={p.heading || ''}
+                onChange={(e) => updateSubHeading(idx, e.target.value)}
+                style={{
+                  ...editInput, flex: 1,
+                  fontSize: 14, fontWeight: 600, fontFamily: FONTS.SERIF,
+                }}
+              />
               <button
-                onClick={() => copy(note)}
+                onClick={() => copy(p.heading, p.body)}
                 style={{ ...BTN_GHOST, fontSize: 11, padding: '5px 10px' }}
-                aria-label="Copy note to clipboard"
+                aria-label="Copy sub-policy"
               >
-                {copiedId === note.issueId
+                {copiedHeading === p.heading
                   ? <><Check size={12} /> Copied</>
                   : <><Copy size={12} /> Copy</>
                 }
               </button>
-            </header>
-            <div className="mono" style={{
-              fontSize: 12, lineHeight: 1.7, color: COLORS.TEXT,
-              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-              background: COLORS.BG_CREAM, border: `1px solid ${COLORS.BORDER}`,
-              borderRadius: 6, padding: 14,
-            }}>
-              {note.noteText}
+              <button
+                onClick={() => removeSub(idx)}
+                title="Remove this sub-policy"
+                style={{
+                  background: 'transparent', border: `1px solid ${COLORS.CRIT}`,
+                  color: COLORS.CRIT, padding: '5px 8px', borderRadius: 4,
+                  fontSize: 11, cursor: 'pointer', fontFamily: FONTS.BODY,
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                }}
+              >
+                <X size={11} />
+              </button>
             </div>
+            <textarea
+              value={p.body || ''}
+              onChange={(e) => updateSubBody(idx, e.target.value)}
+              rows={5}
+              style={{ ...editInput, fontSize: 13, lineHeight: 1.6 }}
+            />
           </article>
         ))}
+
+        <button
+          onClick={addSub}
+          style={{
+            ...BTN_GHOST, justifyContent: 'center', padding: '10px 16px',
+            background: COLORS.BG_CREAM, fontSize: 12,
+          }}
+        >
+          <Edit3 size={13} /> Add sub-policy
+        </button>
       </div>
 
       {/* Caveat */}
@@ -170,10 +230,25 @@ export function SuggestedNotesTab({
   );
 }
 
-// ── Generating state: spinner, batch progress, and a Cancel button ──
-function GeneratingBlock({ progress, onCancel, eligibleIssueCount }) {
+// ── Styles ──
+const smallLabel = {
+  display: 'block', fontSize: 9, fontWeight: 500, textTransform: 'uppercase',
+  letterSpacing: '0.04em', color: COLORS.TEXT_FAINT, marginBottom: 4,
+};
+
+const editInput = {
+  width: '100%', boxSizing: 'border-box',
+  padding: '8px 10px',
+  background: COLORS.BG_CREAM, border: `1px solid ${COLORS.BORDER}`,
+  borderRadius: 5,
+  color: COLORS.TEXT, outline: 'none', fontFamily: FONTS.BODY,
+  resize: 'vertical',
+};
+
+// ── Generating spinner block ──
+function GeneratingBlock({ progress, onCancel }) {
   const current = progress?.current ?? 0;
-  const total   = progress?.total   ?? Math.max(1, Math.ceil((eligibleIssueCount || 0) / 6));
+  const total   = progress?.total   ?? 1;
   const pct     = total > 0 ? Math.round((current / total) * 100) : 0;
 
   return (
@@ -182,11 +257,10 @@ function GeneratingBlock({ progress, onCancel, eligibleIssueCount }) {
         display: 'inline-flex', alignItems: 'center', gap: 8,
         background: COLORS.PRIMARY, color: '#faf6ee',
         padding: '12px 24px', borderRadius: 8,
-        fontSize: 14, fontWeight: 500, fontFamily: FONTS.BODY,
-        opacity: 0.8,
+        fontSize: 14, fontWeight: 500, fontFamily: FONTS.BODY, opacity: 0.85,
       }}>
         <Loader2 size={15} className="spin" />
-        <span>Drafting batch {Math.min(current + 1, total)} of {total}…</span>
+        <span>Drafting accounting policies…</span>
       </div>
 
       <div style={{ marginTop: 14, maxWidth: 360, marginLeft: 'auto', marginRight: 'auto' }}>
@@ -198,10 +272,6 @@ function GeneratingBlock({ progress, onCancel, eligibleIssueCount }) {
             width: `${pct}%`, height: '100%', background: COLORS.PRIMARY,
             borderRadius: 999, transition: 'width 300ms ease-out',
           }} />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 11, color: COLORS.TEXT_MUTED }}>
-          <span>{eligibleIssueCount} issue{eligibleIssueCount === 1 ? '' : 's'} · ~30s per batch</span>
-          <span className="mono">{pct}%</span>
         </div>
       </div>
 

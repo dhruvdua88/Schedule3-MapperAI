@@ -36,25 +36,50 @@ const caroReferenceHTML = `
 `;
 
 // ---- Rule 11 builder ----
-const buildRule11HTML = (rf) => `
+// Renders multi-paragraph text safely by splitting on blank lines.
+function renderParagraphs(text, indent = '48pt') {
+  if (!text) return '';
+  return text
+    .split(/\n{2,}/)              // blank-line splits
+    .map((para) => para.trim())
+    .filter(Boolean)
+    .map((para) => `<p style="margin:5pt 0 5pt ${indent};text-align:justify;">${para.replace(/\n/g, '<br/>')}</p>`)
+    .join('\n');
+}
+
+const buildRule11HTML = (rf) => {
+  // (e) — use editable text if present, else the standard three-part default.
+  const e_text = rf.rule11e_text && rf.rule11e_text.trim().length > 0
+    ? rf.rule11e_text
+    : `(a) The Management has represented that, to the best of its knowledge and belief, no funds (which are material either individually or in the aggregate) have been advanced or loaned or invested (either from borrowed funds or share premium or any other sources or kind of funds) by the Company to or in any other person(s) or entity(ies), including foreign entities ("Intermediaries"), with the understanding, whether recorded in writing or otherwise, that the Intermediary shall, whether, directly or indirectly lend or invest in other persons or entities identified in any manner whatsoever by or on behalf of the Company ("Ultimate Beneficiaries") or provide any guarantee, security or the like on behalf of the Ultimate Beneficiaries;
+
+(b) The Management has represented that, to the best of its knowledge and belief, no funds (which are material either individually or in the aggregate) have been received by the Company from any person(s) or entity(ies), including foreign entities ("Funding Parties"), with the understanding, whether recorded in writing or otherwise, that the Company shall, whether, directly or indirectly, lend or invest in other persons or entities identified in any manner whatsoever by or on behalf of the Funding Party ("Ultimate Beneficiaries") or provide any guarantee, security or the like on behalf of the Ultimate Beneficiaries;
+
+(c) Based on the audit procedures performed that have been considered reasonable and appropriate in the circumstances, nothing has come to our notice that has caused us to believe that the representations under sub-clauses (a) and (b) above contain any material misstatement.`;
+
+  // (g) — prefer user-edited text, otherwise build from software name.
+  const g_text = rf.rule11g_text && rf.rule11g_text.trim().length > 0
+    ? rf.rule11g_text.replaceAll('[SOFTWARE]', rf.accountingSoftware || '[SOFTWARE]')
+    : `Based on our examination, which included test checks, the Company has used ${rf.accountingSoftware} as its accounting software for maintaining its books of account, which has a feature of recording audit trail (edit log) facility and the same has operated throughout the year for all relevant transactions recorded in the software. Further, during the course of our audit, we did not come across any instance of the audit trail feature being tampered with. The audit trail has been preserved by the Company as per the statutory requirements for record retention.`;
+
+  return `
 <p style="margin:8pt 0 6pt 24pt;text-align:justify;">h) With respect to the other matters to be included in the Auditor's Report in accordance with Rule 11 of the Companies (Audit and Auditors) Rules, 2014, as amended, in our opinion and to the best of our information and according to the explanations given to us:</p>
 
-<p style="margin:5pt 0 5pt 48pt;text-align:justify;">i. ${rf.rule11a_litigation}</p>
+<p style="margin:5pt 0 5pt 48pt;text-align:justify;">i. ${rf.rule11a_litigation || ''}</p>
 
-<p style="margin:5pt 0 5pt 48pt;text-align:justify;">ii. ${rf.rule11b_longTermContracts}</p>
+<p style="margin:5pt 0 5pt 48pt;text-align:justify;">ii. ${rf.rule11b_longTermContracts || ''}</p>
 
-<p style="margin:5pt 0 5pt 48pt;text-align:justify;">iii. ${rf.rule11c_iepf}</p>
+<p style="margin:5pt 0 5pt 48pt;text-align:justify;">iii. ${rf.rule11c_iepf || ''}</p>
 
-<p style="margin:5pt 0 5pt 48pt;text-align:justify;">iv. (a) The Management has represented that, to the best of its knowledge and belief, no funds (which are material either individually or in the aggregate) have been advanced or loaned or invested (either from borrowed funds or share premium or any other sources or kind of funds) by the Company to or in any other person(s) or entity(ies), including foreign entities ("Intermediaries"), with the understanding, whether recorded in writing or otherwise, that the Intermediary shall, whether, directly or indirectly lend or invest in other persons or entities identified in any manner whatsoever by or on behalf of the Company ("Ultimate Beneficiaries") or provide any guarantee, security or the like on behalf of the Ultimate Beneficiaries;</p>
+<p style="margin:5pt 0 5pt 48pt;text-align:justify;font-weight:bold;">iv. (Ultimate Beneficiary representation)</p>
+${renderParagraphs(e_text)}
 
-<p style="margin:5pt 0 5pt 48pt;text-align:justify;">(b) The Management has represented that, to the best of its knowledge and belief, no funds (which are material either individually or in the aggregate) have been received by the Company from any person(s) or entity(ies), including foreign entities ("Funding Parties"), with the understanding, whether recorded in writing or otherwise, that the Company shall, whether, directly or indirectly, lend or invest in other persons or entities identified in any manner whatsoever by or on behalf of the Funding Party ("Ultimate Beneficiaries") or provide any guarantee, security or the like on behalf of the Ultimate Beneficiaries;</p>
+<p style="margin:5pt 0 5pt 48pt;text-align:justify;">v. ${rf.rule11f_dividend || ''}</p>
 
-<p style="margin:5pt 0 5pt 48pt;text-align:justify;">(c) Based on the audit procedures performed that have been considered reasonable and appropriate in the circumstances, nothing has come to our notice that has caused us to believe that the representations under sub-clauses (a) and (b) above contain any material misstatement.</p>
-
-<p style="margin:5pt 0 5pt 48pt;text-align:justify;">v. ${rf.rule11f_dividend}</p>
-
-<p style="margin:5pt 0 5pt 48pt;text-align:justify;">vi. Based on our examination, which included test checks, the Company has used <strong>${rf.accountingSoftware}</strong> as its accounting software for maintaining its books of account, which has a feature of recording audit trail (edit log) facility and the same has operated throughout the year for all relevant transactions recorded in the software. Further, during the course of our audit, we did not come across any instance of the audit trail feature being tampered with. As proviso to Rule 3(1) of the Companies (Accounts) Rules, 2014 is applicable from 1 April 2023, reporting under Rule 11(g) of the Companies (Audit and Auditors) Rules, 2014 on preservation of audit trail as per statutory requirements for record retention is applicable for the financial year ended.</p>
+<p style="margin:5pt 0 5pt 48pt;text-align:justify;font-weight:bold;">vi. (Reporting on audit trail under Rule 11(g))</p>
+${renderParagraphs(g_text)}
 `;
+};
 
 // ---- Annexure A: CARO 2020 ----
 const buildAnnexureA = (caro, companyName) => {
@@ -258,48 +283,52 @@ function noteBodyToHtml(noteText) {
 }
 
 /**
- * Build and download a Word document containing all drafted notes.
+ * Build and download a Word document containing the drafted Significant
+ * Accounting Policies note (single comprehensive note).
  *
- * @param {Array<{issueId, noteTitle, noteText}>} draftedNotes
- * @param {object} company    - analysis.company
- * @param {object} reportFields - { firmName, partnerName, ... }
+ * @param {object} draftedPolicy - { noteTitle, introText, subPolicies: [{heading, body}] }
+ * @param {object} company       - analysis.company
+ * @param {object} reportFields  - { firmName, partnerName, ... }
  */
-export function downloadSuggestedNotesWord(draftedNotes, company, reportFields = {}) {
+export function downloadAccountingPoliciesWord(draftedPolicy, company, reportFields = {}) {
   const safeName = (company?.name || 'Company')
     .replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 40);
-  const notesHtml = (draftedNotes || []).map((n, idx) => `
-    <h3 style="font-size:13pt;font-weight:bold;margin:18pt 0 6pt;color:#1a3d2e;">
-      ${idx + 1}. ${escapeHtml(n.noteTitle || 'Suggested Note')}
-      ${n.issueId ? `<span style="font-size:10pt;color:#5c5e58;font-weight:normal;font-family:'Courier New',monospace;">  [${escapeHtml(n.issueId)}]</span>` : ''}
+  const { noteTitle, introText, subPolicies = [] } = draftedPolicy || {};
+
+  const subHtml = subPolicies.map((p) => `
+    <h3 style="font-size:12pt;font-weight:bold;margin:14pt 0 4pt;color:#1a3d2e;">
+      ${escapeHtml(p.heading || '')}
     </h3>
-    ${noteBodyToHtml(n.noteText)}
+    ${noteBodyToHtml(p.body || '')}
   `).join('');
 
   const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
 <head>
 <meta charset="utf-8"/>
-<title>Suggested Notes to Financial Statements — ${escapeHtml(company?.name || 'Company')}</title>
+<title>${escapeHtml(noteTitle || 'Significant Accounting Policies')} — ${escapeHtml(company?.name || 'Company')}</title>
 <style>
-  body { font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.4; color: #000; }
+  body { font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.45; color: #000; }
 </style>
 </head>
 <body>
-  <h1 style="font-size:16pt;font-weight:bold;text-align:center;margin:0 0 6pt;text-decoration:underline;">
-    Suggested Notes to the Financial Statements
+  <h1 style="font-size:14pt;font-weight:bold;text-align:center;margin:0 0 6pt;text-decoration:underline;">
+    ${escapeHtml(noteTitle || 'Note 2 — Significant Accounting Policies')}
   </h1>
   <p style="text-align:center;font-style:italic;margin:0 0 6pt;">${escapeHtml(company?.name || 'Company')}</p>
-  <p style="text-align:center;margin:0 0 18pt;font-size:10pt;">
+  <p style="text-align:center;margin:0 0 18pt;font-size:10pt;color:#5c5e58;">
     Drafted for review pursuant to the Schedule III (Division I) substantive review.<br/>
     ${reportFields.firmName ? escapeHtml(reportFields.firmName) + ' · ' : ''}${reportFields.firmFRN ? 'FRN ' + escapeHtml(reportFields.firmFRN) : ''}
   </p>
-  <p style="margin:10pt 0;text-align:justify;font-style:italic;color:#5c5e58;">
-    The note drafts below are AI-generated suggestions in standard Schedule III wording. Verify every figure, every reference, and every fact against the company's records before adopting in the financial statements. Placeholders shown as [XX] are to be filled by the preparer.
+  ${introText ? `<p style="margin:8pt 0;text-align:justify;">${escapeHtml(introText)}</p>` : ''}
+  ${subHtml || '<p><em>No sub-policies drafted.</em></p>'}
+  <hr style="margin-top:24pt;border:none;border-top:1px solid #d4cab4;"/>
+  <p style="margin:10pt 0;text-align:justify;font-style:italic;color:#5c5e58;font-size:10pt;">
+    The policy drafts above are AI-generated suggestions in standard Schedule III wording. Verify every accounting policy choice, every cited Accounting Standard, and every fact against the Company\'s actual practices before adopting in the financial statements. Placeholders shown in [BRACKETED CAPS] are to be selected or filled by the preparer.
   </p>
-  ${notesHtml || '<p>No notes drafted.</p>'}
 </body>
 </html>`;
 
-  downloadAsWord(html, `${safeName}_Suggested_Notes.doc`);
+  downloadAsWord(html, `${safeName}_Accounting_Policies_Note.doc`);
 }
 
 /**

@@ -28,6 +28,10 @@ export const DEFAULT_REPORT_FIELDS = {
   rule11b_longTermContracts: 'The Company did not have any long-term contracts including derivative contracts for which there were any material foreseeable losses.',
   rule11c_iepf:            'There has been no delay in transferring amounts, required to be transferred, to the Investor Education and Protection Fund by the Company.',
   rule11f_dividend:        'The Company has not declared or paid any dividend during the year.',
+  rule11e_text:            '',  // populated from RULE_11_WORDING.e[0].text by AuditReportTab on first render
+  rule11g_text:            '',  // populated from RULE_11_WORDING.g[0].text with [SOFTWARE] substituted
+  // Tracks which scenario variant the user picked per clause (for sticky dropdown selection)
+  scenario:                { a: null, b: null, c: null, e: null, f: null, g: null },
   // Reviewer toggles — every Rule 11 item must be marked 'Reviewed' before generation
   reviewed: { a: false, b: false, c: false, e: false, f: false, g: false },
 };

@@ -17,10 +17,12 @@ import { X, Brain, ShieldCheck } from 'lucide-react';
 import { COLORS, FONTS, BTN_GHOST } from '../styles/tokens.js';
 
 // Estimated durations per phase, by model. Tweak after observing real runs.
+// SCH3 estimates were lifted after expanding the prompt from 46 to 69 tests
+// (Mar-2026); the 240 s timeout still leaves comfortable headroom.
 const PHASE_DURATIONS = {
   'analyzing-sch3': {
-    'deepseek-v4-pro':   45_000,
-    'deepseek-v4-flash': 28_000,
+    'deepseek-v4-pro':   75_000,
+    'deepseek-v4-flash': 45_000,
   },
   'analyzing-caro': {
     'deepseek-v4-pro':   25_000,
@@ -29,12 +31,14 @@ const PHASE_DURATIONS = {
 };
 
 // Stage labels: [endTimeMs, label]. The last entry is shown for any time beyond it.
+// Stretched to match the 69-test prompt; ICAI Guidance Note checks are explicit.
 const SCH3_STAGES = [
-  [5_000,  'Parsing the extracted statements…'],
-  [12_000, 'Identifying balance sheet structure and key metrics…'],
-  [22_000, 'Cross-checking note disclosures against the 2021 amendment…'],
-  [32_000, 'Reviewing Schedule III ratios and ageing schedules…'],
-  [42_000, 'Evaluating AS compliance and Companies Act disclosures…'],
+  [8_000,  'Parsing the extracted statements…'],
+  [18_000, 'Identifying balance sheet structure and key metrics…'],
+  [32_000, 'Cross-checking the 2021 amendment regulatory disclosures…'],
+  [45_000, 'Verifying share capital, borrowings and ageing schedules…'],
+  [58_000, 'Evaluating AS compliance and CFS classification quality…'],
+  [70_000, 'Reviewing P&L sub-classification and statutory disclosures…'],
   [Infinity, 'Drafting findings and finalising JSON…'],
 ];
 

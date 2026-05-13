@@ -582,6 +582,236 @@ export async function exportExcel({ analysis, caro, reportFields }) {
     });
   }
 
+  // ================================================================
+  // SHEET 6 — MCA VERIFICATION CHECKLIST
+  // ----------------------------------------------------------------
+  // For each fundamental fact, the reviewer ticks a checkbox after
+  // verifying against the MCA portal (master data / e-filings). This
+  // is the artefact ICAI peer review expects to see — proof that the
+  // CA cross-checked the company-statutory data against an
+  // independent source.
+  // ================================================================
+  {
+    const mWS = wb.addWorksheet('MCA Verification', {
+      properties: { tabColor: { argb: C.GREEN_DARK } },
+      views: [{ showGridLines: false, zoomScale: 100 }],
+      pageSetup: {
+        paperSize: 9, orientation: 'landscape', fitToPage: true,
+        fitToWidth: 1, fitToHeight: 0,
+        margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 },
+      },
+      headerFooter: {
+        oddHeader: `&L&"Calibri,Bold"&14${co.name || ''}&R&"Calibri,Italic"&10MCA Master-Data Verification`,
+        oddFooter: `&L${rf.firmName} · ${rf.firmFRN}&CCONFIDENTIAL — AUDIT WORKING PAPER&RPage &P of &N`,
+      },
+    });
+    mWS.columns = [
+      { width: 4 },   // #
+      { width: 36 },  // Check item
+      { width: 11 },  // Done?
+      { width: 32 },  // MCA portal value
+      { width: 32 },  // Books / FS value
+      { width: 30 },  // Variance / Notes
+      { width: 22 },  // Verified by + date
+    ];
+
+    // Title
+    mWS.mergeCells('A1:G2');
+    const mt = mWS.getCell('A1');
+    mt.value = {
+      richText: [
+        { text: 'MCA VERIFICATION CHECKLIST\n', font: { name: 'Calibri', size: 18, bold: true, color: { argb: C.WHITE } } },
+        { text: `${co.name || ''}  ·  ${co.cin || 'CIN —'}  ·  FY ending ${co.yearEnd || '—'}`,
+          font: { name: 'Calibri', size: 11, italic: true, color: { argb: C.CREAM } } },
+      ],
+    };
+    mt.fill = FILL_GREEN;
+    mt.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    mWS.getRow(1).height = 32; mWS.getRow(2).height = 22;
+
+    mWS.mergeCells('A3:G3');
+    const ms = mWS.getCell('A3');
+    ms.value = 'Cross-check each fact against the MCA portal master data / e-filings · tick "Yes" after sighting the supporting screen';
+    ms.font = FS; ms.fill = FILL_SAND;
+    ms.alignment = { horizontal: 'center', vertical: 'middle' };
+    mWS.getRow(3).height = 18;
+
+    // Header row
+    const headers = ['#', 'Check item', 'Verified?', 'Per MCA portal', 'Per books / FS', 'Variance / Notes', 'Verified by · Date'];
+    headers.forEach((h, i) => {
+      const c = mWS.getCell(4, i + 1);
+      c.value = h; c.font = FTH; c.fill = FILL_GREEN;
+      c.alignment = {
+        horizontal: i === 0 || i === 2 ? 'center' : 'left',
+        vertical: 'middle', indent: i === 0 || i === 2 ? 0 : 1,
+        wrapText: true,
+      };
+      c.border = BALL;
+    });
+    mWS.getRow(4).height = 28;
+
+    // Build the canonical checklist. Pre-fill the "Per books / FS" column
+    // from the analysis where we already have the value; reviewer fills the
+    // MCA column after checking the portal.
+    const m       = analysis.keyMetrics || {};
+    const items = [
+      {
+        item: 'Registered office address',
+        booksValue: co.registeredAddress || '',
+        note: 'Verify against latest INC-22 / MGT-7. Note any change during the year and approval reference.',
+      },
+      {
+        item: 'CIN',
+        booksValue: co.cin || '',
+        note: 'CIN must match Notes / Letterhead / MCA Master Data.',
+      },
+      {
+        item: 'Directors as on year-end (and DINs)',
+        booksValue: '',
+        note: 'Verify directors list + DINs against MCA Master Data / latest DIR-12. Flag resignations or appointments during the year.',
+      },
+      {
+        item: 'Shareholding (top promoters + % held + % change)',
+        booksValue: '',
+        note: 'Verify against latest MGT-7 / MGT-7A. Cross-check Schedule III "shares held by promoters" disclosure.',
+      },
+      {
+        item: 'Date of balance sheet',
+        booksValue: co.yearEnd || '',
+        note: 'Should align with financial year end registered with MCA (typically 31 March unless special FY approved).',
+      },
+      {
+        item: 'Paid-up share capital',
+        booksValue: m.paidUpCapitalLakhs != null ? `Rs ${m.paidUpCapitalLakhs.toFixed(2)} lakhs` : '',
+        note: 'Verify against MCA Master Data + latest PAS-3 (return of allotment) + share capital note.',
+      },
+      {
+        item: 'Authorised share capital',
+        booksValue: '',
+        note: 'Verify against MCA Master Data + latest SH-7 (alteration of authorised capital).',
+      },
+      {
+        item: 'Status of charges with ROC',
+        booksValue: '',
+        note: 'Verify open / satisfied charges against MCA "Index of Charges". Check timely filing of CHG-1 / CHG-4.',
+      },
+      {
+        item: 'Statutory auditor appointment (ADT-1)',
+        booksValue: rf.firmName || '',
+        note: 'Verify our appointment via ADT-1 filed for the relevant period. Confirm tenure under Sec 139.',
+      },
+      {
+        item: 'AGM date (prior year) per MGT-7',
+        booksValue: '',
+        note: 'Date AGM was held in the prior FY — required for board\'s report cross-references.',
+      },
+      {
+        item: 'Date of incorporation',
+        booksValue: co.incorporationDate || '',
+        note: 'Verify against MCA Master Data — relevant for first-year reporting period determination.',
+      },
+    ];
+
+    items.forEach((row, i) => {
+      const r = i + 5;
+      const rowFill = i % 2 === 1 ? FILL_SAND : null;
+
+      // # column
+      const cNum = mWS.getCell(r, 1);
+      cNum.value = i + 1;
+      cNum.font = { name: 'Consolas', size: 10, color: { argb: C.MUTED } };
+      cNum.alignment = { horizontal: 'center', vertical: 'middle' };
+      cNum.border = { left: BT, top: BT, bottom: BT };
+      if (rowFill) cNum.fill = rowFill;
+
+      // Check item
+      const cItem = mWS.getCell(r, 2);
+      cItem.value = row.item;
+      cItem.font = { ...FBB };
+      cItem.alignment = { vertical: 'middle', wrapText: true, indent: 1 };
+      cItem.border = { top: BT, bottom: BT };
+      if (rowFill) cItem.fill = rowFill;
+
+      // Verified? — data validation: Yes / No / Pending
+      const cChk = mWS.getCell(r, 3);
+      cChk.value = 'Pending';
+      cChk.font = { ...FBB, size: 10, color: { argb: C.HIGH } };
+      cChk.alignment = { horizontal: 'center', vertical: 'middle' };
+      cChk.border = { top: BT, bottom: BT, left: BT, right: BT };
+      cChk.dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"Yes,No,Pending,N/A"'],
+        showDropDown: false,
+        showErrorMessage: true,
+        errorTitle: 'Invalid status',
+        error: 'Pick one of Yes / No / Pending / N/A',
+      };
+      if (rowFill) cChk.fill = rowFill;
+
+      // Per MCA — blank for reviewer to fill
+      const cMca = mWS.getCell(r, 4);
+      cMca.value = '';
+      cMca.font = FB;
+      cMca.alignment = { vertical: 'middle', wrapText: true, indent: 1 };
+      cMca.border = { top: BT, bottom: BT };
+      if (rowFill) cMca.fill = rowFill;
+
+      // Per books
+      const cBooks = mWS.getCell(r, 5);
+      cBooks.value = row.booksValue;
+      cBooks.font = FB;
+      cBooks.alignment = { vertical: 'middle', wrapText: true, indent: 1 };
+      cBooks.border = { top: BT, bottom: BT };
+      if (rowFill) cBooks.fill = rowFill;
+
+      // Variance / Notes — pre-fill the standard prompt as italic placeholder text
+      const cNote = mWS.getCell(r, 6);
+      cNote.value = row.note;
+      cNote.font = { name: 'Calibri', size: 10, italic: true, color: { argb: C.MUTED } };
+      cNote.alignment = { vertical: 'middle', wrapText: true, indent: 1 };
+      cNote.border = { top: BT, bottom: BT };
+      if (rowFill) cNote.fill = rowFill;
+
+      // Verified by + date
+      const cBy = mWS.getCell(r, 7);
+      cBy.value = '';
+      cBy.font = FB;
+      cBy.alignment = { vertical: 'middle', wrapText: true, indent: 1 };
+      cBy.border = { top: BT, bottom: BT, right: BT };
+      if (rowFill) cBy.fill = rowFill;
+
+      mWS.getRow(r).height = 42;
+    });
+
+    // Conditional formatting on "Verified?" column — green for Yes, red for No, orange for Pending
+    const firstStatusRow = 5;
+    const lastStatusRow  = 5 + items.length - 1;
+    mWS.addConditionalFormatting({
+      ref: `C${firstStatusRow}:C${lastStatusRow}`,
+      rules: [
+        { type: 'containsText', operator: 'containsText', text: 'Yes',
+          style: { font: { bold: true, color: { argb: C.WHITE } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: C.LOW } } }, priority: 1 },
+        { type: 'containsText', operator: 'containsText', text: 'N/A',
+          style: { font: { bold: true, color: { argb: C.WHITE } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: C.MUTED } } }, priority: 2 },
+        { type: 'containsText', operator: 'containsText', text: 'No',
+          style: { font: { bold: true, color: { argb: C.WHITE } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: C.CRIT } } }, priority: 3 },
+        { type: 'containsText', operator: 'containsText', text: 'Pending',
+          style: { font: { bold: true, color: { argb: C.WHITE } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: C.HIGH } } }, priority: 4 },
+      ],
+    });
+
+    // Footer reminder row
+    const lastRow = lastStatusRow + 2;
+    mWS.mergeCells(lastRow, 1, lastRow, 7);
+    const fc = mWS.getCell(lastRow, 1);
+    fc.value = 'Reviewer must sight the supporting MCA screen / e-filing for every "Yes". Retain screenshots in the audit working paper file.';
+    fc.font = { ...FS, color: { argb: C.MUTED } };
+    fc.fill = FILL_SAND;
+    fc.alignment = { horizontal: 'center', vertical: 'middle' };
+    mWS.getRow(lastRow).height = 22;
+  }
+
   // ---- Write & trigger download ----
   const buffer = await wb.xlsx.writeBuffer();
   const blob   = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

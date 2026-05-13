@@ -8,9 +8,11 @@
 // different names (e.g. 'deepseek-chat', 'deepseek-reasoner'), update the
 // DEFAULT_MODEL constant below and the Settings panel options accordingly.
 
-const BASE_URL      = 'https://api.deepseek.com';
-const DEFAULT_MODEL = 'deepseek-v4-pro';
-const TIMEOUT_MS    = 120_000; // 120 s — abort if DeepSeek doesn't respond
+const BASE_URL              = 'https://api.deepseek.com';
+const DEFAULT_MODEL         = 'deepseek-v4-pro';
+const DEFAULT_TIMEOUT_MS    = 120_000; // 120 s — used by CARO, notes, chat
+// Longer-running calls (e.g. expanded SCH3 with 69 tests) can opt into more
+// headroom by passing `timeoutMs: 240_000` to callDeepSeek.
 
 // ---- Custom error classes ----
 export class AuthError extends Error {
@@ -133,6 +135,7 @@ function withTimeout(callerSignal, timeoutMs) {
  * @param {number}   [opts.temperature] - Sampling temperature (default: 0.0).
  * @param {number}   [opts.top_p]      - Nucleus sampling cutoff (default: 0.1).
  * @param {boolean}  [opts.bypassCache] - Skip cache lookup and store (default: false).
+ * @param {number}   [opts.timeoutMs]  - Per-call timeout (default: 120_000). SCH3 passes 240_000.
  * @returns {Promise<object>}          - Parsed JSON object from model response
  */
 export async function callDeepSeek({
@@ -147,6 +150,7 @@ export async function callDeepSeek({
   temperature = 0.0,
   top_p       = 0.1,
   bypassCache = false,
+  timeoutMs   = DEFAULT_TIMEOUT_MS,
 }) {
   if (!apiKey) throw new AuthError('No API key provided. Please add your DeepSeek API key in Settings.');
 
@@ -181,7 +185,7 @@ export async function callDeepSeek({
           }
           if (onUsage) onUsage(u);
         },
-        onFirstToken, temperature, top_p, useStreaming,
+        onFirstToken, temperature, top_p, useStreaming, timeoutMs,
       });
 
       // Stash in cache on success.
@@ -217,6 +221,7 @@ export async function chatDeepSeek({
   temperature = 0.3,  // slightly higher than the audit calls — more conversational
   top_p       = 0.9,
   onUsage,
+  timeoutMs   = DEFAULT_TIMEOUT_MS,
 }) {
   if (!apiKey)   throw new AuthError('No API key provided. Please add your DeepSeek API key in Settings.');
   if (!messages) throw new ApiError('chatDeepSeek requires a messages array.');
@@ -233,7 +238,7 @@ export async function chatDeepSeek({
     stream: false,
   };
 
-  const guard = withTimeout(signal, TIMEOUT_MS);
+  const guard = withTimeout(signal, timeoutMs);
   let response;
   try {
     try {
@@ -245,7 +250,7 @@ export async function chatDeepSeek({
       });
     } catch (err) {
       if (err.name === 'AbortError') {
-        if (guard.didTimeOut()) throw new ApiError(`Chat request timed out after ${Math.round(TIMEOUT_MS / 1000)}s.`, 408);
+        if (guard.didTimeOut()) throw new ApiError(`Chat request timed out after ${Math.round(timeoutMs / 1000)}s.`, 408);
         throw err;
       }
       throw new ApiError(`Network error: ${err.message}.`);
@@ -284,18 +289,19 @@ export async function chatDeepSeek({
 // ============================================================
 async function _doCall(opts) {
   // Wrap caller signal with our own timeout — fetch will abort cleanly
-  // after TIMEOUT_MS even if the caller forgot to pass a signal. The
+  // after `timeoutMs` even if the caller forgot to pass a signal. The
   // inner function takes the guarded signal directly.
-  const guard = withTimeout(opts.signal, TIMEOUT_MS);
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const guard = withTimeout(opts.signal, timeoutMs);
   try {
-    return await _doCallInner({ ...opts, signal: guard.signal, didTimeOut: guard.didTimeOut });
+    return await _doCallInner({ ...opts, signal: guard.signal, didTimeOut: guard.didTimeOut, timeoutMs });
   } finally {
     guard.cancel();
   }
 }
 
 async function _doCallInner({
-  apiKey, model, systemPrompt, userPrompt, signal, didTimeOut,
+  apiKey, model, systemPrompt, userPrompt, signal, didTimeOut, timeoutMs,
   onUsage, onFirstToken, temperature, top_p, useStreaming,
 }) {
   let response;
@@ -325,7 +331,7 @@ async function _doCallInner({
     if (err.name === 'AbortError') {
       // Distinguish "we timed out" from "user cancelled" so retry can fire.
       if (didTimeOut && didTimeOut()) {
-        throw new ApiError(`DeepSeek request timed out after ${Math.round(TIMEOUT_MS / 1000)}s.`, 408);
+        throw new ApiError(`DeepSeek request timed out after ${Math.round((timeoutMs ?? DEFAULT_TIMEOUT_MS) / 1000)}s.`, 408);
       }
       throw err;
     }
@@ -377,7 +383,7 @@ async function _doCallInner({
         ({ value, done } = await reader.read());
       } catch (err) {
         if (err.name === 'AbortError' && didTimeOut && didTimeOut()) {
-          throw new ApiError(`DeepSeek stream timed out after ${Math.round(TIMEOUT_MS / 1000)}s.`, 408);
+          throw new ApiError(`DeepSeek stream timed out after ${Math.round((timeoutMs ?? DEFAULT_TIMEOUT_MS) / 1000)}s.`, 408);
         }
         throw err;
       }

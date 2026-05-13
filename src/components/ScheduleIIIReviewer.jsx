@@ -16,7 +16,7 @@ import { DEFAULT_REPORT_FIELDS }                 from '../data/reportDefaults.js
 import { extractPdfToMarkdown }                  from '../lib/pdfExtract.js';
 import { ocrPdfToMarkdown }                      from '../lib/ocrPdf.js';
 import { callDeepSeek, chatDeepSeek, AuthError, RateLimitError, ApiError } from '../lib/deepseek.js';
-import { generateReport, downloadAsWord, downloadSuggestedNotesWord } from '../lib/docExport.js';
+import { generateReport, downloadAsWord, downloadAccountingPoliciesWord } from '../lib/docExport.js';
 import { exportExcel }                           from '../lib/excelExport.js';
 import { fmtLakhs }                              from '../lib/format.js';
 import {
@@ -179,10 +179,11 @@ export function ScheduleIIIReviewer() {
   const [ocrRunning,  setOcrRunning]  = useState(false);
   const [ocrProgress, setOcrProgress] = useState(null);
 
-  // ── Notes auto-drafter ──
-  const [draftedNotes,    setDraftedNotes]    = useState(null);   // null = not yet generated
+  // ── Accounting policies drafter ──
+  // Now a SINGLE comprehensive note: { noteTitle, introText, subPolicies: [{heading, body}] }
+  const [draftedPolicy,   setDraftedPolicy]   = useState(null);   // null = not yet generated
   const [notesGenerating, setNotesGenerating] = useState(false);
-  const [notesProgress,   setNotesProgress]   = useState(null);   // { current, total } for batches
+  const [notesProgress,   setNotesProgress]   = useState(null);
   const notesAbortRef = useRef(null);
 
   // ── Engagement chat ──
@@ -430,6 +431,7 @@ export function ScheduleIIIReviewer() {
         signal:       ctrl.signal,
         temperature:  0.0,
         top_p:        0.1,
+        timeoutMs:    240_000,    // 4-minute ceiling for the expanded 69-test SCH3 run
         onUsage:      (u) => setTokenUsage((prev) => ({ ...prev, sch3: u })),
         onFirstToken: () => setFirstTokenReceivedAt(Date.now()),
       });
@@ -560,59 +562,42 @@ export function ScheduleIIIReviewer() {
     return isDisclosureType || looksMissing;
   });
 
-  // Batched notes drafting — splits the eligible-issues list into chunks so
-  // each DeepSeek call is fast and resilient. With ~6 issues per batch a
-  // typical run finishes in 30-50s per batch, with the user seeing progress
-  // and able to cancel at any time.
-  const NOTES_BATCH_SIZE = 6;
-
+  // Single-call accounting policies drafter. Produces ONE comprehensive
+  // "Significant Accounting Policies" note (Note 2) covering every relevant
+  // sub-policy for the engagement. Cancellable; respects the global timeout.
   const handleGenerateNotes = async () => {
     if (!analysis || notesGenerating) return;
-    if (eligibleNotesIssues.length === 0) return;
 
     const ctrl = new AbortController();
     notesAbortRef.current = ctrl;
 
     setNotesGenerating(true);
-    setDraftedNotes(null);
+    setDraftedPolicy(null);
+    setNotesProgress({ current: 0, total: 1 });
 
-    // Split into batches of NOTES_BATCH_SIZE
-    const batches = [];
-    for (let i = 0; i < eligibleNotesIssues.length; i += NOTES_BATCH_SIZE) {
-      batches.push(eligibleNotesIssues.slice(i, i + NOTES_BATCH_SIZE));
-    }
-    setNotesProgress({ current: 0, total: batches.length });
-
-    const allDrafts = [];
     try {
-      for (let bi = 0; bi < batches.length; bi++) {
-        if (ctrl.signal.aborted) throw new DOMException('Aborted', 'AbortError');
-        setNotesProgress({ current: bi, total: batches.length });
-        const batch = batches[bi];
-        const result = await callDeepSeek({
-          apiKey,
-          model:        selectedModel,
-          systemPrompt: 'You are a senior Indian Chartered Accountant drafting Schedule III–compliant Notes to the Financial Statements. Use the canonical wording, paragraph references, and tabular structures used in published audited Indian financial statements. Where company-specific figures are unknown, use placeholder [XX] for the preparer to fill in.',
-          userPrompt:   NOTES_DRAFT_PROMPT(batch, analysis.company, analysis.keyMetrics),
-          signal:       ctrl.signal,
-          temperature:  0.1,
-          top_p:        0.2,
-        });
-        const drafts = Array.isArray(result?.draftedNotes) ? result.draftedNotes : [];
-        allDrafts.push(...drafts);
-        // Update the visible list incrementally so the user sees progress.
-        setDraftedNotes([...allDrafts]);
+      const result = await callDeepSeek({
+        apiKey,
+        model:        selectedModel,
+        systemPrompt: 'You are a senior Indian Chartered Accountant drafting the "Significant Accounting Policies" note for an Indian private/unlisted company\'s Schedule III Division I financial statements. Use canonical Indian audit-firm phrasing. Cite the relevant Accounting Standard (AS) where material. Use [BRACKETED CAPS] placeholders only where a true preparer choice is required (e.g., depreciation method WDV/SLM, inventory cost formula, useful-life override).',
+        userPrompt:   NOTES_DRAFT_PROMPT(analysis.scheduleIIIIssues || [], analysis.company, analysis.keyMetrics),
+        signal:       ctrl.signal,
+        temperature:  0.1,
+        top_p:        0.2,
+      });
+
+      const policy = result?.accountingPolicies;
+      if (!policy || !Array.isArray(policy.subPolicies)) {
+        throw new Error('Model returned an invalid policy shape — see console for the raw payload.');
       }
-      setNotesProgress({ current: batches.length, total: batches.length });
+      setDraftedPolicy(policy);
+      setNotesProgress({ current: 1, total: 1 });
     } catch (err) {
       if (err.name === 'AbortError') {
-        // Keep whatever drafts we got — surface a soft message in the tab.
-        if (allDrafts.length === 0) setDraftedNotes(null);
-        console.warn('Note drafting cancelled.');
+        console.warn('Accounting policies drafting cancelled.');
       } else {
-        console.error('Note drafting failed:', err);
-        alert('Note drafting failed: ' + (err.message || 'Unknown error') + (allDrafts.length > 0 ? `\n\n${allDrafts.length} notes were drafted before the failure — they remain visible.` : ''));
-        if (allDrafts.length === 0) setDraftedNotes(null);
+        console.error('Accounting policies drafting failed:', err);
+        alert('Accounting policies drafting failed: ' + (err.message || 'Unknown error'));
       }
     } finally {
       setNotesGenerating(false);
@@ -626,8 +611,8 @@ export function ScheduleIIIReviewer() {
   };
 
   const handleDownloadNotesWord = () => {
-    if (!draftedNotes || draftedNotes.length === 0) return;
-    downloadSuggestedNotesWord(draftedNotes, analysis?.company, reportFields);
+    if (!draftedPolicy) return;
+    downloadAccountingPoliciesWord(draftedPolicy, analysis?.company, reportFields);
   };
 
   // ════════════════════════════════════════════════════
@@ -782,7 +767,7 @@ INSTRUCTIONS
   const handleReset = () => {
     setFile(null); setMarkdown(''); setPdfMeta(null); setPdfPages([]);
     setSourceModalIssue(null);
-    setDraftedNotes(null); setNotesGenerating(false);
+    setDraftedPolicy(null); setNotesGenerating(false);
     setChatOpen(false); setChatMessages([]); setChatSending(false);
     setIssueStates({}); setCurrentEngagementId(null);
     setAnalysis(null); setCaro(null);
@@ -973,15 +958,13 @@ INSTRUCTIONS
                   <Hash size={14} /> CARO Clauses
                 </TabBtn>
               )}
-              {eligibleNotesIssues.length > 0 && (
-                <TabBtn
-                  active={tab === 'suggested-notes'}
-                  onClick={() => setTab('suggested-notes')}
-                  count={draftedNotes ? draftedNotes.length : undefined}
-                >
-                  <FilePlus2 size={14} /> Suggested Notes
-                </TabBtn>
-              )}
+              <TabBtn
+                active={tab === 'suggested-notes'}
+                onClick={() => setTab('suggested-notes')}
+                count={draftedPolicy?.subPolicies?.length}
+              >
+                <FilePlus2 size={14} /> Accounting Policies
+              </TabBtn>
               <TabBtn active={tab === 'audit-report'} onClick={() => setTab('audit-report')}>
                 <FileSignature size={14} /> Audit Report
               </TabBtn>
@@ -1044,16 +1027,17 @@ INSTRUCTIONS
               </div>
             )}
 
-            {/* Suggested Notes tab */}
+            {/* Suggested Notes tab — single comprehensive Accounting Policies note */}
             {tab === 'suggested-notes' && (
               <SuggestedNotesTab
-                draftedNotes={draftedNotes}
+                draftedPolicy={draftedPolicy}
                 generating={notesGenerating}
                 progress={notesProgress}
                 onGenerate={handleGenerateNotes}
                 onCancel={handleCancelNotes}
                 onDownloadWord={handleDownloadNotesWord}
-                eligibleIssueCount={eligibleNotesIssues.length}
+                onUpdatePolicy={setDraftedPolicy}
+                hasAnalysis={!!analysis}
               />
             )}
 
