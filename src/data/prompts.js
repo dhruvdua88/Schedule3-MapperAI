@@ -116,6 +116,44 @@ T06  Reserves & Surplus arithmetic.
      TRIGGER  : Reserves & Surplus note is presented with opening, additions and deductions.
      FAIL IF  : Opening balance + Profit for the year ± transfers − dividend − tax on dividend − other appropriations does NOT equal the Closing balance for any individual reserve line.
 
+T70  Balance Sheet balancing — Total Assets = Total Equity & Liabilities.
+     TRIGGER  : A Balance Sheet is presented.
+     FAIL IF  : Total Assets does NOT equal Total Equity & Liabilities (or Total Liabilities + Equity). Flag any variance exceeding Rs 1 lakh OR 0.5% of total assets, whichever is lower. Cite both figures and the absolute and percentage variance. This is a fundamental FS-integrity break — usually a sub-total typo or a misclassified line, NOT a rounding artefact.
+
+T71  Notes-to-face tie-out — each significant BS line ties to its note total.
+     TRIGGER  : Balance Sheet line items cross-reference notes (typical pattern: "Note 5", "Note 12", etc., next to the line).
+     FAIL IF  : For any of the following significant Balance Sheet lines, the face value does NOT equal the total disclosed in the corresponding note (with comparatives tested for both years where presented). Test each that is non-zero:
+       — Property, Plant & Equipment (face vs. PPE schedule "Total" / "Net block");
+       — Capital Work-in-Progress (face vs. CWIP schedule total);
+       — Intangible Assets (face vs. intangibles schedule total);
+       — Non-current Investments (face vs. investments note total);
+       — Current Investments (face vs. investments note total);
+       — Long-term Loans & Advances (face vs. note total);
+       — Other Non-current Assets (face vs. note total);
+       — Inventories (face vs. inventories note total — by category);
+       — Trade Receivables (face vs. ageing schedule + bifurcation total);
+       — Cash & cash equivalents (face vs. note total);
+       — Other Bank Balances (face vs. note total);
+       — Short-term Loans & Advances (face vs. note total);
+       — Other Current Assets (face vs. note total);
+       — Share Capital (face vs. share capital note total);
+       — Reserves & Surplus (face vs. R&S note total);
+       — Long-term Borrowings (face vs. note total);
+       — Short-term Borrowings (face vs. note total);
+       — Long-term Provisions (face vs. note total);
+       — Short-term Provisions (face vs. note total);
+       — Trade Payables (face vs. payables ageing schedule total);
+       — Other Current Liabilities (face vs. note total).
+     Permit Rs 1 thousand absolute slack for rounding artefacts. Flag with the line item name, face value, note total, and variance.
+
+T72  Within-note arithmetic — note components sum to the stated total.
+     TRIGGER  : A note discloses a sub-total or "Total" line preceded by component line items.
+     FAIL IF  : The sum of the component line items does NOT equal the stated Total within that note. Test ALL notes that have a Total line — Property Plant & Equipment schedule, Trade Receivables ageing, Trade Payables ageing, CWIP ageing, Investments note, Inventories note, Reserves & Surplus note, Share Capital note, Borrowings note, Loans & Advances note, Provisions note, Other Income, Employee Benefits Expense, Finance Costs, Other Expenses, etc. Flag the note title, the components, the computed sum, the disclosed Total, and the variance. Permit Rs 1 thousand slack.
+
+T73  Opening = prior-year closing on every movement schedule.
+     TRIGGER  : A movement schedule is presented for any line — Property Plant & Equipment, Reserves & Surplus, CWIP, Intangible Assets under Development, Investments, Provisions, etc. — showing both opening AND closing balances with comparatives.
+     FAIL IF  : The current-year opening balance does NOT equal the prior-year closing balance for any line (gross block, accumulated depreciation, net block, each reserve type, etc.). Where a restatement occurred and is disclosed in a "reclassification" or "restatement" footnote, that explains the variance — do NOT flag in that case. Otherwise flag with the line item, the current opening, the prior closing, and the unexplained variance.
+
 ════════════════════════════════════════════
 SECTION B — 2021 MCA AMENDMENT MANDATORY DISCLOSURES [all HIGH unless noted]
 ════════════════════════════════════════════

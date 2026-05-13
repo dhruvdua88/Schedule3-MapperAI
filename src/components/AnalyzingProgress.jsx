@@ -17,7 +17,7 @@ import { X, Brain, ShieldCheck } from 'lucide-react';
 import { COLORS, FONTS, BTN_GHOST } from '../styles/tokens.js';
 
 // Estimated durations per phase, by model. Tweak after observing real runs.
-// SCH3 estimates were lifted after expanding the prompt from 46 to 69 tests
+// SCH3 estimates were lifted after expanding the prompt from 46 to 73 tests
 // (Mar-2026); the 240 s timeout still leaves comfortable headroom.
 const PHASE_DURATIONS = {
   'analyzing-sch3': {
@@ -31,7 +31,7 @@ const PHASE_DURATIONS = {
 };
 
 // Stage labels: [endTimeMs, label]. The last entry is shown for any time beyond it.
-// Stretched to match the 69-test prompt; ICAI Guidance Note checks are explicit.
+// Stretched to match the 73-test prompt; ICAI Guidance Note checks are explicit.
 const SCH3_STAGES = [
   [8_000,  'Parsing the extracted statements…'],
   [18_000, 'Identifying balance sheet structure and key metrics…'],

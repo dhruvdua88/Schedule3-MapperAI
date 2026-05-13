@@ -475,7 +475,7 @@ export function ScheduleIIIReviewer() {
         signal:       ctrl.signal,
         temperature:  0.0,
         top_p:        0.1,
-        timeoutMs:    240_000,    // 4-minute ceiling for the expanded 69-test SCH3 run
+        timeoutMs:    240_000,    // 4-minute ceiling for the expanded 73-test SCH3 run
         onUsage:      (u) => setTokenUsage((prev) => ({ ...prev, sch3: u })),
         onFirstToken: () => setFirstTokenReceivedAt(Date.now()),
       });
@@ -1053,7 +1053,7 @@ INSTRUCTIONS
                     <div style={{ fontSize: 13, color: COLORS.TEXT, lineHeight: 1.5 }}>
                       <strong style={{ color: COLORS.HIGH }}>Quick Review complete.</strong>
                       {' '}{issuesSorted.length} finding{issuesSorted.length === 1 ? '' : 's'} from ~25 deterministic checks.
-                      The full 69-test Deep AI Review covers semantic checks the rule engine can't reason about.
+                      The full 73-test Deep AI Review covers semantic checks the rule engine can't reason about.
                     </div>
                     <button
                       onClick={() => {

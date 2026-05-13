@@ -66,7 +66,7 @@ export function SettingsGate({ onUnlock, onSkip }) {
         <p style={{ fontSize: 13, color: COLORS.TEXT_MUTED, lineHeight: 1.55, marginBottom: 28 }}>
           Schedule III &amp; CARO 2020 review for Indian Chartered Accountants.
           The deterministic <strong>Quick Review</strong> works without an API key.
-          For the full 69-test <strong>Deep AI Review</strong>, paste your <strong>DeepSeek API key</strong> — it stays in your browser only.
+          For the full 73-test <strong>Deep AI Review</strong>, paste your <strong>DeepSeek API key</strong> — it stays in your browser only.
         </p>
 
         {/* Key input */}

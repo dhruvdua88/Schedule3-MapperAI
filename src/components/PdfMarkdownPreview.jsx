@@ -303,7 +303,7 @@ export function PdfMarkdownPreview({
               </span>
             </div>
             <p style={{ fontSize: 12, color: COLORS.TEXT_MUTED, margin: 0, lineHeight: 1.5 }}>
-              Full <strong>69-test</strong> AI pass over the entire document. Runs Quick Review first, then layers DeepSeek on top for the semantic / judgement checks.
+              Full <strong>73-test</strong> AI pass over the entire document. Runs Quick Review first, then layers DeepSeek on top for the semantic / judgement checks.
             </p>
             <button
               onClick={handleAnalyze}

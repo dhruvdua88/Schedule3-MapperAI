@@ -26,7 +26,7 @@ Open `http://localhost:5173`. You can use the app immediately — click **Skip �
    - **Arithmetic** — Tax-PBT alignment, CFS tie-back, Reserves arithmetic.
    - **Structural** — Balance Sheet balancing (Total Assets = Equity + Liabilities), comparative-year presence, CIN format validity.
    - **Tie-out checks** — notes-to-face reconciliation (PPE / Trade Receivables / Inventories / Reserves note totals tie to face of BS); within-note arithmetic (line items sum to disclosed total); opening = prior-year closing for movement schedules.
-3. **Deep AI Review (DeepSeek)** — full **69-test** pass across six sections (Internal Consistency, 2021 MCA Amendment, Other Sch III Presentation, AS Compliance, Companies Act, P&amp;L Sub-classification). Runs Quick Review first and merges results — every issue is tagged `Rule`, `AI`, or `Rule + AI`.
+3. **Deep AI Review (DeepSeek)** — full **73-test** pass across six sections (Internal Consistency, 2021 MCA Amendment, Other Sch III Presentation, AS Compliance, Companies Act, P&amp;L Sub-classification). Runs Quick Review first and merges results — every issue is tagged `Rule`, `AI`, or `Rule + AI`.
 4. **CARO 2020** — Para 1(2)(iv) applicability arithmetic runs locally regardless of route; AI clause-level review only fires when CARO actually applies (saves the API call on small private companies).
 5. **Source-anchored evidence** — each issue's quote is fuzzy-matched back to its PDF page; click the "Page N" chip to see the matched passage highlighted.
 6. **Per-issue review workflow** — Accept / Dismiss / For-review / Note actions with reviewer-name and timestamp audit trail. Survives reloads. Designed for ICAI peer-review compliance.

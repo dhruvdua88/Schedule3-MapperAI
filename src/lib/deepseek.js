@@ -11,7 +11,7 @@
 const BASE_URL              = 'https://api.deepseek.com';
 const DEFAULT_MODEL         = 'deepseek-v4-pro';
 const DEFAULT_TIMEOUT_MS    = 120_000; // 120 s — used by CARO, notes, chat
-// Longer-running calls (e.g. expanded SCH3 with 69 tests) can opt into more
+// Longer-running calls (e.g. expanded SCH3 with 73 tests) can opt into more
 // headroom by passing `timeoutMs: 240_000` to callDeepSeek.
 
 // ---- Custom error classes ----

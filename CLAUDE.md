@@ -13,7 +13,7 @@
 Two review paths exist:
 
 1. **Quick Review** — a deterministic, local rule engine (~25 checks). No API key needed. Runs in ~2 seconds.
-2. **Deep AI Review** — full 69-test pass via DeepSeek's OpenAI-compatible API. Runs the rule engine first, then layers AI on top, then merges by test ID.
+2. **Deep AI Review** — full 73-test pass via DeepSeek's OpenAI-compatible API. Runs the rule engine first, then layers AI on top, then merges by test ID.
 
 The user is **Dhruv Dua** of Dhruv Dua & Co. Chartered Accountants (FRN 028145N). Default firm settings reflect this.
 
@@ -55,7 +55,7 @@ sch3-reviewer/
     ├── styles/
     │   └── tokens.js          ← colours / fonts / button styles / SEVERITY config
     ├── data/
-    │   ├── prompts.js         ← SCH3_PROMPT (69 tests), CARO_PROMPT, NOTES_DRAFT_PROMPT
+    │   ├── prompts.js         ← SCH3_PROMPT (73 tests), CARO_PROMPT, NOTES_DRAFT_PROMPT
     │   ├── caroRemarks.js     ← STANDARD_CARO_REMARKS (21 ICAI illustrative paragraphs)
     │   ├── reportDefaults.js  ← DEFAULT_REPORT_FIELDS for Audit Report tab
     │   ├── rule11Wording.js   ← Scenario-tagged variants for Rule 11(a)..(g)
@@ -121,7 +121,7 @@ Don't introduce parallel shapes. If you add a field, follow the existing naming.
 
 **Determinism settings.** SCH3 calls run at `temperature: 0.0`, `top_p: 0.1`. CARO matches. Chat is `0.3 / 0.9` (intentionally looser). Don't change without discussing.
 
-**Timeouts.** Default `callDeepSeek` timeout = 120s. SCH3 passes `timeoutMs: 240_000` because the 69-test prompt can take longer on dense documents. Don't lower this.
+**Timeouts.** Default `callDeepSeek` timeout = 120s. SCH3 passes `timeoutMs: 240_000` because the 73-test prompt can take longer on dense documents. Don't lower this.
 
 **Retry.** `callDeepSeek` auto-retries 3× with exponential backoff on 429 / 5xx / network errors. Don't retry on auth or content-filter errors.
 
@@ -138,7 +138,7 @@ Don't introduce parallel shapes. If you add a field, follow the existing naming.
 ## Recent decisions (chronological — most recent first)
 
 - **Rule engine + soft-gate (latest):** `Quick Review` always runs deterministic checks first; `Deep AI Review` layers DeepSeek on top with `mergeAnalyses`. Source pills on issue cards. 25 deterministic checks including notes-to-face tie-out, within-note arithmetic, opening = prior-year closing.
-- **SCH3 prompt expanded 46 → 69 tests** across A (consistency), B (2021 amendment), C (other Sch III incl. share capital block), D (AS compliance), E (Companies Act), F (P&L disclosure). Output cap at 60 issues per call.
+- **SCH3 prompt expanded 46 → 73 tests** across A (consistency incl. T70-T73 tie-out checks), B (2021 amendment), C (other Sch III incl. share capital block), D (AS compliance), E (Companies Act), F (P&L disclosure). Output cap at 60 issues per call.
 - **MCA Verification tab** added to the Excel export — 11-row checklist for reviewer to cross-check books vs MCA portal.
 - **Notes drafter rewritten** as a single comprehensive "Significant Accounting Policies" note (Note 2). Editable per sub-policy. Word export `downloadAccountingPoliciesWord`.
 - **Audit Report tab scenario dropdowns** — each Rule 11 clause has a dropdown of standard variants drawn from `rule11Wording.js`. Rule 11(g) has 8 variants from the ICAI Implementation Guide on Audit Trail (Revised 2024).
