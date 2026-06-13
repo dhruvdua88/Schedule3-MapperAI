@@ -10,7 +10,8 @@ import {
 } from 'lucide-react';
 
 import { COLORS, FONTS, SEVERITY, BTN_PRIMARY } from '../styles/tokens.js';
-import { SCH3_PROMPT, CARO_PROMPT, NOTES_DRAFT_PROMPT } from '../data/prompts.js';
+import { CARO_PROMPT, NOTES_DRAFT_PROMPT } from '../data/prompts.js';
+import { runSch3Sectioned }                from '../lib/sch3Run.js';
 import { STANDARD_CARO_REMARKS }                 from '../data/caroRemarks.js';
 import { DEFAULT_REPORT_FIELDS }                 from '../data/reportDefaults.js';
 import { extractPdfToMarkdown }                  from '../lib/pdfExtract.js';
@@ -485,17 +486,21 @@ export function ScheduleIIIReviewer() {
       setAnalysisStartedAt(Date.now());
       setFirstTokenReceivedAt(null);
 
-      const rawSch3 = await callDeepSeek({
+      // Fan the 73-test prompt out into six per-section DeepSeek calls run
+      // concurrently, then merge. Wall-clock ≈ the slowest section instead of
+      // the sum, and DeepSeek's prefix cache is hit on the shared
+      // [system preamble + document] across the six calls. See lib/sch3Run.js.
+      const rawSch3 = await runSch3Sectioned({
         apiKey,
-        model:        selectedModel,
-        systemPrompt: 'You are a senior Chartered Accountant reviewing Indian company financial statements for Schedule III compliance. Quote verbatim from the source document where you cite figures or disclosure text. Do not paraphrase. Do not infer facts that are not present in the document. If a required disclosure is absent, say so explicitly with the phrase "Disclosure not located in the document".',
-        userPrompt:   `${mdText}\n\n${SCH3_PROMPT}`,
-        signal:       ctrl.signal,
-        temperature:  0.0,
-        top_p:        0.1,
-        timeoutMs:    240_000,    // 4-minute ceiling for the expanded 73-test SCH3 run
-        onUsage:      (u) => setTokenUsage((prev) => ({ ...prev, sch3: u })),
-        onFirstToken: () => setFirstTokenReceivedAt(Date.now()),
+        model:         selectedModel,
+        systemRole:    'You are a senior Chartered Accountant reviewing Indian company financial statements for Schedule III compliance. Quote verbatim from the source document where you cite figures or disclosure text. Do not paraphrase. Do not infer facts that are not present in the document. If a required disclosure is absent, say so explicitly with the phrase "Disclosure not located in the document".',
+        markdown:      mdText,
+        signal:        ctrl.signal,
+        timeoutMs:     240_000,    // 4-minute ceiling per section
+        onUsage:       (u) => setTokenUsage((prev) => ({ ...prev, sch3: u })),
+        // Treat the first resolved section as "model has started responding"
+        // so the progress UI advances (non-streaming has no token callback).
+        onSectionDone: () => setFirstTokenReceivedAt((t) => t || Date.now()),
       });
       // Sanity-filter the AI response.
       const sanitised = sanitiseSch3Response(rawSch3);
