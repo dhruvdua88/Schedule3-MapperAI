@@ -10,9 +10,9 @@
 //     Sub-Note Group  (Level 3)  — free presentation label the AI drafts so the
 //                                  face of the balance sheet reads well
 //
-// The Face/Note come from the tool's own dropdown vocabulary, so a paste never
-// breaks the workbook's data validations. The Final Code is then derived
-// DETERMINISTICALLY from (Face, Note) — no AI guessing on codes.
+// The Face/Note come from the tool's OWN dependent-dropdown vocabulary
+// (extracted from the workbook's data-validation named ranges), so a paste
+// never breaks the workbook's validations. Sub-Note is free text (no dropdown).
 //
 // AI is used ONLY for judgement (which head, which note, and how to group
 // similar ledgers into a tidy sub-note). Everything else is mechanical.
@@ -22,7 +22,7 @@
 
 import { callDeepSeek } from './deepseek.js';
 import {
-  FACE_HEADS, NOTES_BY_FACE, canonicalFace, canonicalNote, codeFor,
+  FACE_HEADS, NOTES_BY_FACE, canonicalFace, canonicalNote,
 } from '../data/sch3Vocab.js';
 
 // ---- Column detection ---------------------------------------------------
@@ -156,19 +156,35 @@ function buildUserPrompt(chunk) {
     curSub: r.curSub || undefined,
   }));
 
-  return `CONTROLLED VOCABULARY — Face head : allowed Note groupings
+  return `You are filling the Schedule III Automation Tool's grouping columns. The
+tool ENFORCES these exact data validations (dependent dropdowns):
+  * Face grouping (col G): must be one of the Face heads listed below.
+  * Note grouping (col H): dependent dropdown = INDIRECT(SUBSTITUTE(Face," ","_")).
+    It MUST be one of THAT face's allowed notes listed below — nothing else, or
+    the paste breaks the workbook's validation.
+  * Sub-Note grouping (col I): free text (no dropdown) — YOU draft it for a clean
+    balance-sheet presentation.
+
+VALIDATION VOCABULARY — "Face head" => allowed Note groupings (verbatim):
 ${vocabBlock()}
 
 RULES
 1. For EACH ledger return face, note, subNote.
-2. "face" MUST be copied verbatim from a Face head above. "note" MUST be copied
-   verbatim from that face's allowed Note groupings. Never output anything else.
+2. "face" MUST be copied character-for-character from a Face head above. "note"
+   MUST be copied character-for-character from THAT face's allowed notes above.
+   Do not paraphrase, re-case, singularise, or invent — an unlisted value is a
+   validation error. If the ledger truly fits no listed note, pick the face's
+   "Specify at level 3" (if present) and put the detail in subNote.
 3. Use the sign of "amount" and the Tally sysGroup as evidence: negative =
    credit balance (liability / income / capital); positive = debit (asset /
    expense). A ledger named like a bank/party/tax tells you its head.
-4. If curFace/curNote are already present AND valid for the vocabulary, KEEP them
-   unless they are clearly wrong; then set action:"keep". If blank, set
-   action:"fill". If you correct a wrong value, set action:"change".
+   Examples honouring the lists: TDS/GST/PF/ESI/Prof-tax payable ->
+   "Other current liabilities" > "Statutory dues"; vendor advances ->
+   "Short term loans and advances" > "Advances to suppliers"; prepaid/interest
+   accrued receivable -> "Other current assets" > "Others"/"Interest accrued".
+4. If curFace/curNote are already present AND valid (appear verbatim in the lists),
+   KEEP them unless clearly wrong; then action:"keep". If blank, action:"fill".
+   If you correct a wrong/unlisted value, action:"change".
 5. subNote — Level 3, drafted by YOU for clean balance-sheet presentation:
    - GROUP similar ledgers under ONE shared, well-worded label so the note reads
      well. Examples: all TDS/TCS ledgers -> "TDS / TCS Payable"; PF & ESI ->
@@ -202,21 +218,20 @@ const AGGREGATE_FACES = new Set([
 
 function validateMapping(row, m) {
   const face = canonicalFace(m?.face) || canonicalFace(row.curFace);
-  let note = '', code = null, status = 'ok', flags = [];
+  let note = '', status = 'ok', flags = [];
 
   if (!face) {
     status = 'review';
-    flags.push('face not in vocabulary');
+    flags.push('face not in the tool\'s Face list');
   } else {
     note = canonicalNote(face, m?.note) || canonicalNote(face, row.curNote);
-    // Deterministic fallback: if the face has exactly one valid note (e.g.
-    // "Other current assets" -> "Specify at Level 3"), assign it — no ambiguity.
+    // Deterministic fallback: if the face's dependent dropdown has exactly one
+    // valid note (e.g. "Capture from FAR"), assign it — no ambiguity.
     if (!note) {
       const opts = NOTES_BY_FACE[face] || [];
       if (opts.length === 1) note = opts[0];
     }
-    if (!note) { status = 'review'; flags.push('note not valid for face'); }
-    else code = codeFor(face, note);
+    if (!note) { status = 'review'; flags.push('note not in this face\'s allowed list'); }
   }
 
   // Faces that are presented in AGGREGATE (with an ageing / MSME-vs-others
@@ -238,7 +253,7 @@ function validateMapping(row, m) {
 
   return {
     ...row,
-    face, note, subNote, code,
+    face, note, subNote,
     action, changed,
     status,               // 'ok' | 'review'
     flags,
@@ -330,9 +345,9 @@ export function toGroupingTSV(results) {
 
 /** Full review TSV incl. ledger, amount and code — for records / re-paste with a key column. */
 export function toFullTSV(results) {
-  const head = ['Name of Ledger', 'Amount', 'Face Grouping', 'Note Grouping', 'Sub-Note Grouping', 'Code', 'Action', 'Confidence', 'Reason'];
+  const head = ['Name of Ledger', 'Amount', 'Face Grouping', 'Note Grouping', 'Sub-Note Grouping', 'Action', 'Confidence', 'Reason'];
   const body = results.map((r) => [
-    r.ledger, r.amount ?? '', r.face, r.note, r.subNote, r.code ?? '',
+    r.ledger, r.amount ?? '', r.face, r.note, r.subNote,
     r.action, r.confidence ?? '', r.reason,
   ].join('\t'));
   return [head.join('\t'), ...body].join('\n');
@@ -369,7 +384,6 @@ export async function downloadMappingExcel(results, companyName = 'Grouping') {
     { header: 'Face Grouping', key: 'face', width: 30 },
     { header: 'Note Grouping', key: 'note', width: 34 },
     { header: 'Sub-Note Grouping', key: 'sub', width: 28 },
-    { header: 'Code', key: 'code', width: 10 },
     { header: 'Action', key: 'action', width: 10 },
     { header: 'Confidence', key: 'conf', width: 11 },
     { header: 'Reason', key: 'reason', width: 40 },
@@ -380,7 +394,7 @@ export async function downloadMappingExcel(results, companyName = 'Grouping') {
   results.forEach((r) => {
     const row = ws.addRow({
       ledger: r.ledger, amount: r.amount ?? '', face: r.face, note: r.note,
-      sub: r.subNote, code: r.code ?? '', action: r.action,
+      sub: r.subNote, action: r.action,
       conf: r.confidence ?? '', reason: r.reason,
     });
     if (r.status === 'review') {

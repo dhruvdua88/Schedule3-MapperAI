@@ -18,7 +18,7 @@ import { COLORS, FONTS, BTN_PRIMARY } from '../styles/tokens.js';
 import { Button } from './ui/Button.jsx';
 import { Card } from './ui/Card.jsx';
 import { getApiKey, setApiKey as persistApiKey, getSettings, saveSettings } from '../lib/engagementStore.js';
-import { FACE_HEADS, NOTES_BY_FACE, codeFor } from '../data/sch3Vocab.js';
+import { FACE_HEADS, NOTES_BY_FACE } from '../data/sch3Vocab.js';
 import {
   parsePasted, readWorkbookToGrid, parseGrid, mapGroupings,
   toGroupingTSV, toFullTSV, downloadMappingExcel,
@@ -162,7 +162,6 @@ export function GroupingMapper() {
         next.status = next.face && next.note ? 'ok' : 'review';
       }
       if (patch.note !== undefined) next.status = next.face && next.note ? 'ok' : 'review';
-      next.code = (next.face && next.note) ? codeFor(next.face, next.note) : null;
       return next;
     }));
   };
@@ -207,7 +206,7 @@ export function GroupingMapper() {
           <p style={{ color: COLORS.TEXT_MUTED, fontSize: 14, margin: '4px 0 0', maxWidth: 760, lineHeight: 1.55 }}>
             Paste or upload your trial balance. AI assigns a validated <b>Face</b>, <b>Note</b> and a
             well-drafted <b>Sub-Note</b> grouping to every ledger — copy the three columns straight back
-            into the Schedule III tool's data-validated cells. Blanks get filled; Final Codes are derived automatically.
+            into the Schedule III tool's data-validated cells. Face and Note are constrained to the tool's exact dropdown lists; Sub-Note is free text you can tune.
           </p>
         </div>
       </div>
@@ -426,7 +425,6 @@ function RowsTable({ rows, onEdit }) {
             <th style={th}>Face grouping</th>
             <th style={th}>Note grouping</th>
             <th style={th}>Sub-note grouping</th>
-            <th style={{ ...th, textAlign: 'center' }}>Code</th>
             <th style={{ ...th, textAlign: 'center' }}>Flag</th>
           </tr>
         </thead>
@@ -455,7 +453,6 @@ function RowsTable({ rows, onEdit }) {
                 <td style={{ padding: '6px 8px', minWidth: 170 }}>
                   <input aria-label={`Sub-note grouping for ${r.ledger}`} value={r.subNote} onChange={(e) => onEdit(r.idx, { subNote: e.target.value })} style={selStyle} placeholder="presentation label" />
                 </td>
-                <td style={{ padding: '7px 8px', textAlign: 'center', fontSize: 12, fontFamily: FONTS.MONO, color: COLORS.TEXT_MUTED }}>{r.code ?? '—'}</td>
                 <td style={{ padding: '7px 8px', textAlign: 'center' }}>
                   {r.status === 'review'
                     ? <AlertTriangle size={14} style={{ color: COLORS.CRIT }} />
