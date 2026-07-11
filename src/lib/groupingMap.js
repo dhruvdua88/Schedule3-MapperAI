@@ -170,14 +170,16 @@ RULES
    unless they are clearly wrong; then set action:"keep". If blank, set
    action:"fill". If you correct a wrong value, set action:"change".
 5. subNote — Level 3, drafted by YOU for clean balance-sheet presentation:
-   - Give EVERY ledger a subNote (never blank).
    - GROUP similar ledgers under ONE shared, well-worded label so the note reads
      well. Examples: all TDS/TCS ledgers -> "TDS / TCS Payable"; PF & ESI ->
      "PF & ESI Payable"; GST ledgers -> "GST Payable"; multiple vendor advances
      -> "Advances to Vendors"; salary/bonus/incentive payables -> "Employee
      Dues Payable"; audit/professional fee payables -> "Provision for Expenses".
-   - Where a ledger must be shown by name (related-party loans, individual
-     directors, specific investments), use the cleaned ledger name as subNote.
+   - LEAVE subNote BLANK ("") for Trade payables (creditors) and Trade
+     receivables (debtors) — these are shown in aggregate with an MSME/others +
+     ageing schedule, NOT by individual party. Never put a party name there.
+   - Otherwise where a ledger must be shown by name (related-party loans,
+     individual directors, specific investments), use the cleaned ledger name.
    - Title Case, <= 6 words, no trailing punctuation, consistent across siblings.
 6. confidence: 0-1. reason: <= 12 words, why this head/note.
 
@@ -189,6 +191,14 @@ RETURN ONLY THIS JSON (one object per ledger, same i):
 }
 
 // ---- Validation ---------------------------------------------------------
+
+// Faces shown in aggregate + ageing schedule — individual parties are never
+// listed on the face of the BS, so these carry NO per-ledger sub-note.
+const AGGREGATE_FACES = new Set([
+  'Trade payables due to MSME',
+  'Trade payables due to others',
+  'Trade receivables',
+]);
 
 function validateMapping(row, m) {
   const face = canonicalFace(m?.face) || canonicalFace(row.curFace);
@@ -209,8 +219,16 @@ function validateMapping(row, m) {
     else code = codeFor(face, note);
   }
 
-  const subNote = (m?.subNote || row.curSub || '').trim();
-  if (!subNote) flags.push('sub-note blank');
+  // Faces that are presented in AGGREGATE (with an ageing / MSME-vs-others
+  // schedule) and NEVER line up individual party ledgers on the face or in the
+  // note — trade payables (creditors) and trade receivables (debtors). A
+  // per-party sub-note there is wrong, so force it blank regardless of the AI.
+  let subNote = (m?.subNote || row.curSub || '').trim();
+  if (face && AGGREGATE_FACES.has(face)) {
+    subNote = '';
+  } else if (!subNote) {
+    flags.push('sub-note blank');
+  }
 
   const action = m?.action || (row.curFace ? 'keep' : 'fill');
   const changed =
