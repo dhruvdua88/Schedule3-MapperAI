@@ -1,8 +1,13 @@
-# Schedule III Reviewer
+# Schedule III · MapperAI
 
-Schedule III &amp; CARO 2020 audit-review tool for Indian Chartered Accountants. Two-path workflow — a deterministic **Quick Review** that runs entirely in your browser with no API key, plus an optional **Deep AI Review** powered by DeepSeek for the semantic / judgement checks the rule engine can't reason about.
+Schedule III (Division I) &amp; CARO 2020 toolkit for Indian Chartered Accountants. Two modes, switchable from the top bar:
 
-Built with Vite 5 + React 18. Runs entirely client-side — your PDF text and DeepSeek API key never leave the machine except for the AI request sent directly to `api.deepseek.com`.
+- **Schedule III Reviewer** — audit-review of a filed PDF/Excel: a deterministic **Quick Review** (no API key) plus an optional **Deep AI Review** powered by DeepSeek.
+- **Grouping Mapper** — paste or upload a trial balance from the Schedule III Automation Tool and DeepSeek assigns a **validated Face / Note / Sub-Note grouping** to every ledger. The three columns copy straight back into the tool's data-validated cells; blanks get filled and the Final Code is derived deterministically from (Face, Note). Similar ledgers (TDS, GST, PF/ESI, vendor advances) are grouped into tidy sub-notes that read well on the face of the balance sheet.
+
+**Live:** https://dhruvdua88.github.io/Schedule3-MapperAI/
+
+Built with Vite 5 + React 18. Runs entirely client-side — your data and DeepSeek API key never leave the machine except for the AI request sent directly to `api.deepseek.com`. Models: `deepseek-chat` (fast) / `deepseek-reasoner` (accurate).
 
 ---
 
