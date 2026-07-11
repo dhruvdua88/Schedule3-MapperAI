@@ -182,6 +182,23 @@ RULES
    "Other current liabilities" > "Statutory dues"; vendor advances ->
    "Short term loans and advances" > "Advances to suppliers"; prepaid/interest
    accrued receivable -> "Other current assets" > "Others"/"Interest accrued".
+3a. DISAMBIGUATION — always pick a listed note, never leave it blank:
+   - "credit card" (Axis/HDFC/Kotak etc. card, credit balance) -> "Other current
+     liabilities" > "Other payables" (card dues repayable).
+   - Clearing & forwarding / C&F / freight / cartage (expense) -> "Other expenses"
+     > "Freight outward" (outward) or "Freight Inward" (inward/purchase).
+   - "share application money" RECEIVED (credit) -> face "Share application money
+     pending allotment" > "Specify at level 3"; share application money PAID by us
+     (debit, an asset) -> "Short term loans and advances" > "Others".
+   - Rent/electricity/utility PAYABLE, or a bare person/party name with a credit
+     balance and no loan context, under current liabilities -> "Other payables".
+   - Security/rent DEPOSIT paid (debit, non-current) -> "Other non current assets"
+     > "Security Deposits"; if clearly < 12 months -> "Short term loans and
+     advances" > "Others".
+   - GST input / ITC / RCM input (debit) -> "Other current assets" > "Others".
+   - When still genuinely unsure of the note, use the face's catch-all that IS in
+     its list — "Other payables" / "Others" / "Other Expenses" / "Specify at level
+     3" — rather than returning an empty note.
 4. If curFace/curNote are already present AND valid (appear verbatim in the lists),
    KEEP them unless clearly wrong; then action:"keep". If blank, action:"fill".
    If you correct a wrong/unlisted value, action:"change".
@@ -320,8 +337,10 @@ export async function mapGroupings({
 
   const results = rows.map((r) => byIdx.get(r.idx)).filter(Boolean);
 
-  // Deterministic presentation pass: unify sub-note spelling within each bucket
-  // so word-order / plural / punctuation variants collapse to ONE line.
+  // Deterministic presentation pass: first normalise each sub-note's surface
+  // form (casing/spacing/noise), then unify spelling within each bucket so
+  // word-order / plural / punctuation variants collapse to ONE line.
+  for (const r of results) if (r.subNote) r.subNote = formatSubNote(r.subNote);
   const subNoteMerges = canonicalizeSubNotes(results);
 
   const stats = {
@@ -335,6 +354,44 @@ export async function mapGroupings({
   };
 
   return { results, stats };
+}
+
+// ---- Deterministic sub-note presentation formatting ---------------------
+// Uniform surface form so lines read consistently on the face of the BS.
+// Fixes: whitespace, "&" spacing, trailing bookkeeping noise, and casing —
+// Title Case for ordinary words, small joining words kept lower (unless first),
+// and known accounting acronyms forced UPPER so "gst"/"Gst"/"GST" never diverge.
+const _SUBNOTE_ACRONYMS = new Set([
+  'TDS', 'TCS', 'GST', 'CGST', 'SGST', 'IGST', 'UTGST', 'RCM', 'ITC', 'HSN',
+  'PF', 'ESI', 'ESIC', 'PT', 'MLWF', 'LWF', 'MAT', 'TAN', 'PAN', 'GSTIN',
+  'CCTV', 'AMC', 'EMI', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'POS', 'OD', 'CC',
+  'HDFC', 'ICICI', 'SBI', 'IDBI', 'RBL', 'IDFC', 'PNB', 'BOB', 'L&T',
+  'MSME', 'TReDS', 'ROC', 'MCA', 'DTA', 'DTL', 'FD', 'RD', 'NBFC',
+]);
+const _SUBNOTE_SMALL = new Set(['of', 'to', 'and', 'for', 'on', 'in', 'the', 'a', 'an', 'at', 'by', 'as', 'or']);
+const _SUBNOTE_TAIL = /\s*[-–—]?\s*(a\/c|account|ledger|g\/l)\.?$/i;
+
+export function formatSubNote(raw) {
+  if (!raw) return '';
+  let s = String(raw).replace(/\s+/g, ' ').trim();
+  s = s.replace(_SUBNOTE_TAIL, '').trim();      // strip "A/c"/"Account"/"Ledger" tail FIRST
+  // Space "&" and "/" only when they join full words (≥2 chars each) — keeps
+  // "L&T" and "A/c" tight while fixing "Repairs&Maintenance", "TDS/TCS".
+  s = s.replace(/(\w{2,})\s*&\s*(\w{2,})/g, '$1 & $2');
+  s = s.replace(/(\w{2,})\s*\/\s*(\w{2,})/g, '$1 / $2');
+  s = s.replace(/\s{2,}/g, ' ').trim();
+  const words = s.split(' ');
+  const out = words.map((w, i) => {
+    const up = w.toUpperCase();
+    if (_SUBNOTE_ACRONYMS.has(up)) return up;          // known acronym
+    if (w === '&' || w === '/' || w === '-') return w;
+    // token that is ALREADY an acronym-ish all-caps ≤4 (e.g. CCTV, IGST) — keep
+    if (/^[A-Z0-9]{2,5}$/.test(w) && !/[a-z]/.test(w)) return w;
+    const lw = w.toLowerCase();
+    if (i > 0 && _SUBNOTE_SMALL.has(lw)) return lw;     // small joining word
+    return lw.charAt(0).toUpperCase() + lw.slice(1);    // Title Case
+  });
+  return out.join(' ').replace(/\s{2,}/g, ' ').trim();
 }
 
 // ---- Deterministic sub-note canonicalisation ----------------------------
