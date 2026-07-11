@@ -473,23 +473,26 @@ export function formatSubNote(raw) {
   if (!raw) return '';
   let s = String(raw).replace(/\s+/g, ' ').trim();
   s = s.replace(_SUBNOTE_TAIL, '').trim();      // strip "A/c"/"Account"/"Ledger" tail FIRST
+  // Space out initials glued by a dot ("S.santha" -> "S. santha") so the name
+  // part gets cased; digits (2.5) are untouched (both sides must be letters).
+  s = s.replace(/([A-Za-z])\.([A-Za-z])/g, '$1. $2');
   // Space "&" and "/" only when they join full words (≥2 chars each) — keeps
   // "L&T" and "A/c" tight while fixing "Repairs&Maintenance", "TDS/TCS".
   s = s.replace(/(\w{2,})\s*&\s*(\w{2,})/g, '$1 & $2');
   s = s.replace(/(\w{2,})\s*\/\s*(\w{2,})/g, '$1 / $2');
   s = s.replace(/\s{2,}/g, ' ').trim();
-  const words = s.split(' ');
-  const out = words.map((w, i) => {
+  // Case EVERY alphanumeric run (not just space-delimited tokens) so words after
+  // "(", "-" or "." also format — "(gst)" -> "(GST)", "-adaptor" -> "-Adaptor".
+  s = s.replace(/[A-Za-z][A-Za-z0-9]*/g, (w, offset, full) => {
     const up = w.toUpperCase();
-    if (_SUBNOTE_ACRONYMS.has(up)) return up;          // known acronym
-    if (w === '&' || w === '/' || w === '-') return w;
-    // token that is ALREADY an acronym-ish all-caps ≤4 (e.g. CCTV, IGST) — keep
-    if (/^[A-Z0-9]{2,5}$/.test(w) && !/[a-z]/.test(w)) return w;
+    if (_SUBNOTE_ACRONYMS.has(up)) return up;                 // known acronym
+    if (/^[A-Z0-9]{2,5}$/.test(w) && !/[a-z]/.test(w)) return w; // already an acronym (CCTV)
     const lw = w.toLowerCase();
-    if (i > 0 && _SUBNOTE_SMALL.has(lw)) return lw;     // small joining word
-    return lw.charAt(0).toUpperCase() + lw.slice(1);    // Title Case
+    const atWordStart = offset === 0 || full[offset - 1] === ' ';
+    if (offset > 0 && atWordStart && _SUBNOTE_SMALL.has(lw)) return lw; // small joining word
+    return lw.charAt(0).toUpperCase() + lw.slice(1);          // Title Case
   });
-  return out.join(' ').replace(/\s{2,}/g, ' ').trim();
+  return s.replace(/\s{2,}/g, ' ').trim();
 }
 
 // ---- Deterministic sub-note canonicalisation ----------------------------
