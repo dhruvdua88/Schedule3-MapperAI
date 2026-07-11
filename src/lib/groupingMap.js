@@ -320,6 +320,10 @@ export async function mapGroupings({
 
   const results = rows.map((r) => byIdx.get(r.idx)).filter(Boolean);
 
+  // Deterministic presentation pass: unify sub-note spelling within each bucket
+  // so word-order / plural / punctuation variants collapse to ONE line.
+  const subNoteMerges = canonicalizeSubNotes(results);
+
   const stats = {
     total: results.length,
     filled: results.filter((r) => r.action === 'fill').length,
@@ -327,9 +331,58 @@ export async function mapGroupings({
     kept: results.filter((r) => r.action === 'keep').length,
     review: results.filter((r) => r.status === 'review').length,
     subNoteGroups: new Set(results.map((r) => r.subNote).filter(Boolean)).size,
+    subNoteMerges,
   };
 
   return { results, stats };
+}
+
+// ---- Deterministic sub-note canonicalisation ----------------------------
+// Within one (Face, Note) bucket, sub-notes that reduce to the SAME token set
+// after lower-casing, dropping punctuation/noise words, and singularising are
+// the same presentation line written differently ("Input CGST Credit" vs
+// "CGST Input Credit"; "Advances to Vendors" vs "Advance to Vendor"). Collapse
+// each such family to one canonical surface form = the most frequent variant
+// (tie -> shortest -> alphabetical). This is conservative: genuinely different
+// items keep different token sets (CGST vs IGST, TDS vs TCS) and are NOT merged.
+const _SUBNOTE_STOP = new Set([
+  'the', 'a', 'an', 'to', 'of', 'and', 'for', 'on', 'in', 'as',
+  'payable', 'payables', 'receivable', 'receivables',
+  'ac', 'account', 'accounts',
+]);
+function subNoteKey(s) {
+  return String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/)
+    .filter(Boolean).map((w) => w.replace(/s$/, ''))
+    .filter((w) => !_SUBNOTE_STOP.has(w)).sort().join(' ');
+}
+export function canonicalizeSubNotes(results) {
+  const families = new Map(); // face|note|tokenKey -> Map(surface -> count)
+  for (const r of results) {
+    if (!r.subNote) continue;
+    const k = subNoteKey(r.subNote);
+    if (!k) continue;                       // sub-note was only noise words
+    const key = `${r.face}|${r.note}|${k}`;
+    if (!families.has(key)) families.set(key, new Map());
+    const m = families.get(key);
+    m.set(r.subNote, (m.get(r.subNote) || 0) + 1);
+  }
+  const canonical = new Map();
+  for (const [key, m] of families) {
+    if (m.size < 2) { canonical.set(key, [...m.keys()][0]); continue; }
+    const best = [...m.entries()].sort(
+      (a, b) => b[1] - a[1] || a[0].length - b[0].length || a[0].localeCompare(b[0]),
+    )[0][0];
+    canonical.set(key, best);
+  }
+  let merged = 0;
+  for (const r of results) {
+    if (!r.subNote) continue;
+    const k = subNoteKey(r.subNote);
+    if (!k) continue;
+    const c = canonical.get(`${r.face}|${r.note}|${k}`);
+    if (c && c !== r.subNote) { r.subNote = c; merged++; }
+  }
+  return merged;
 }
 
 // ---- Output builders ----------------------------------------------------
