@@ -196,6 +196,10 @@ RULES
      > "Security Deposits"; if clearly < 12 months -> "Short term loans and
      advances" > "Others".
    - GST input / ITC / RCM input (debit) -> "Other current assets" > "Others".
+   - Bank overdraft / cash-credit / OD / CC limit (credit) is SECURED against
+     current assets -> "Short term borrowings" > "Secured Loans repayable on
+     demand from banks" (NOT the Unsecured line). Interest on OD -> "Finance
+     costs" > "Interest expense".
    - When still genuinely unsure of the note, use the face's catch-all that IS in
      its list — "Other payables" / "Others" / "Other Expenses" / "Specify at level
      3" — rather than returning an empty note.
@@ -359,6 +363,7 @@ export async function mapGroupings({
   //      collapses AI wording drift for the biggest clusters);
   //  (b) surface-form normalise (casing/spacing/noise);
   //  (c) token-set canonicalise within each bucket (word-order/plural/status).
+  const deterministicNotes = applyDeterministicNotes(results);
   const deterministicSubNotes = applyDeterministicSubNotes(results);
   for (const r of results) if (r.subNote) r.subNote = formatSubNote(r.subNote);
   const subNoteMerges = canonicalizeSubNotes(results);
@@ -372,9 +377,38 @@ export async function mapGroupings({
     subNoteGroups: new Set(results.map((r) => r.subNote).filter(Boolean)).size,
     subNoteMerges,
     deterministicSubNotes,
+    deterministicNotes,
   };
 
   return { results, stats };
+}
+
+// ---- Deterministic MAIN-NOTE corrections (unmistakable, in-vocab) --------
+// A few ledger patterns have a Schedule III note that is not a judgement call.
+// Correct the AI's note ONLY when the pattern is unmistakable AND the target
+// note is valid for the face the AI already chose (never changes the face).
+// e.g. a bank overdraft / cash-credit is SECURED against current assets, so it
+// belongs in "Secured Loans repayable on demand from banks", not the Unsecured
+// line the model sometimes picks.
+const _NOTE_RULES = [
+  {
+    face: 'Short term borrowings',
+    re: /overdraft|\bo\/?d\b|cash\s*credit|\bcc\s*(a\/?c|limit|account)|bank.*\bod\b/i,
+    note: 'Secured Loans repayable on demand from banks',
+  },
+];
+export function applyDeterministicNotes(results) {
+  let n = 0;
+  for (const r of results) {
+    if (!r.face) continue;
+    const hit = _NOTE_RULES.find((x) => x.face === r.face && x.re.test(r.ledger));
+    if (hit && (NOTES_BY_FACE[r.face] || []).includes(hit.note) && r.note !== hit.note) {
+      r.note = hit.note;
+      if (!r.flags.includes('deterministic note')) r.flags.push('deterministic note');
+      n++;
+    }
+  }
+  return n;
 }
 
 // ---- Deterministic sub-note dictionary (well-known statutory/tax lines) --
