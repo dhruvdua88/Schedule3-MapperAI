@@ -13,8 +13,13 @@ export function clearApiKey()   { localStorage.removeItem(KEY_API); }
 
 // ---- App Settings ----
 const DEFAULT_SETTINGS = {
-  model:       'deepseek-v4-pro',   // NOTE: change if DeepSeek renames this model
-  modelFlash:  'deepseek-v4-flash',
+  // Real DeepSeek model ids (OpenAI-compatible endpoint). 'deepseek-chat' is the
+  // fast/cheap V3 model ("flash" tier); 'deepseek-reasoner' is the R1 reasoning
+  // model. The earlier 'deepseek-v4-pro'/'-flash' strings were placeholders that
+  // 404 against the live API — migrated here so calls actually resolve.
+  model:       'deepseek-chat',
+  modelFlash:  'deepseek-chat',
+  mapperModel: 'deepseek-chat',     // Grouping Mapper default (fast tier)
   firmName:    'Dhruv Dua & Co.',
   partnerName: 'Dhruv Dua',
   firmFRN:     '028145N',

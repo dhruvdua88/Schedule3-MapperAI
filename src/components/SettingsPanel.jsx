@@ -105,8 +105,8 @@ export function SettingsPanel({ settings, apiKey, onSettingsChange, onApiKeyChan
           <div style={{ marginBottom: 16 }}>
             <label style={labelStyle}>Default model</label>
             <select value={localSettings.model} onChange={(e) => update('model', e.target.value)} style={inputStyle}>
-              <option value="deepseek-v4-pro">deepseek-v4-pro (default, heavier reasoning)</option>
-              <option value="deepseek-v4-flash">deepseek-v4-flash (faster, cheaper)</option>
+              <option value="deepseek-chat">deepseek-chat (fast, default — V3)</option>
+              <option value="deepseek-reasoner">deepseek-reasoner (heavier reasoning — R1)</option>
             </select>
             <p style={{ marginTop: 4, fontSize: 11, color: COLORS.TEXT_FAINT }}>
               NOTE: If DeepSeek changes the model slug, update it here.

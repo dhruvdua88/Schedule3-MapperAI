@@ -364,17 +364,17 @@ export function PdfMarkdownPreview({
               background: COLORS.BG_CREAM,
             }}>
               <ModelPill
-                active={selectedModel === 'deepseek-v4-pro'}
-                onClick={() => onModelChange('deepseek-v4-pro')}
+                active={selectedModel === 'deepseek-reasoner'}
+                onClick={() => onModelChange('deepseek-reasoner')}
                 icon={Brain}
-                label="pro"
+                label="reasoner"
                 sublabel="deeper reasoning · ~75s"
               />
               <ModelPill
-                active={selectedModel === 'deepseek-v4-flash'}
-                onClick={() => onModelChange('deepseek-v4-flash')}
+                active={selectedModel === 'deepseek-chat'}
+                onClick={() => onModelChange('deepseek-chat')}
                 icon={Zap}
-                label="flash"
+                label="chat"
                 sublabel="faster · cheaper · ~45s"
               />
             </div>

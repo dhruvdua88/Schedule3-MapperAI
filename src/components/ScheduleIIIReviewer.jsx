@@ -215,7 +215,7 @@ export function ScheduleIIIReviewer() {
   // survive across engagements. The Settings panel still owns the global default.
   const [selectedModel, setSelectedModel] = useState(() => {
     const prefs = getRunPrefs();
-    return prefs.model || getSettings().model || 'deepseek-v4-pro';
+    return prefs.model || getSettings().model || 'deepseek-chat';
   });
   const [runCaro, setRunCaro] = useState(() => getRunPrefs().runCaro);
   // Tracks whether the model has begun streaming output for the active call.
@@ -855,7 +855,7 @@ INSTRUCTIONS
     setTab('issues');
     // Reset per-run controls back to defaults
     setRunCaro(true);
-    setSelectedModel(settings.model || 'deepseek-v4-pro');
+    setSelectedModel(settings.model || 'deepseek-chat');
     setAnalysisStartedAt(null);
     setFirstTokenReceivedAt(null);
   };
