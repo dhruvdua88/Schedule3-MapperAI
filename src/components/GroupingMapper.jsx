@@ -124,7 +124,7 @@ export function GroupingMapper() {
       ingestGrid(grid, file.name);
     } catch (err) {
       setParsed(null);
-      setParseErr(`Could not read "${file.name}": ${err.message}. Tip: .xlsb binary workbooks aren't supported — save the T_B sheet as .xlsx or copy-paste the columns.`);
+      setParseErr(`Could not read "${file.name}": ${err.message}. If the CDN is blocked, copy-paste the T_B columns instead.`);
     }
   };
 
@@ -254,9 +254,9 @@ export function GroupingMapper() {
         <Card style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
             <Button variant="ghost" onClick={() => fileRef.current?.click()}>
-              <Upload size={14} /> Upload .xlsx / .csv
+              <Upload size={14} /> Upload .xlsb / .xlsx / .xls / .csv
             </Button>
-            <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.csv" style={{ display: 'none' }}
+            <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xlsb,.xls,.ods,.csv" style={{ display: 'none' }}
               onChange={(e) => onFile(e.target.files?.[0])} />
             <Button variant="ghost" onClick={() => onPaste(SAMPLE)}>
               <Sparkles size={14} /> Load sample

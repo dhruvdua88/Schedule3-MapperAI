@@ -385,36 +385,59 @@ export async function downloadMappingExcel(results, companyName = 'Grouping') {
 }
 
 /** Read an uploaded .xlsx/.xlsm/.csv into a grid the parser understands.
- *  Picks the sheet whose header row contains a "ledger" column (or the largest). */
+ *  Picks the sheet whose header row contains a "ledger" column (or the largest).
+ *
+ *  Uses SheetJS (xlsx) — lazy-loaded from CDN — so it reads EVERY spreadsheet
+ *  format the preparer's tool emits: .xlsx / .xlsm / .xlsb (binary) / .xls /
+ *  .ods / .csv. ExcelJS can't parse .xlsb; SheetJS can. */
+function loadSheetJS() {
+  return new Promise((resolve, reject) => {
+    if (typeof window !== 'undefined' && window.XLSX) return resolve(window.XLSX);
+    const existing = document.querySelector('script[data-sheetjs]');
+    if (existing) {
+      existing.addEventListener('load', () => window.XLSX ? resolve(window.XLSX) : reject(new Error('SheetJS load incomplete')));
+      existing.addEventListener('error', () => reject(new Error('SheetJS script failed')));
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+    s.async = true; s.dataset.sheetjs = 'true';
+    let done = false;
+    s.onload = () => { if (!done) { done = true; window.XLSX ? resolve(window.XLSX) : reject(new Error('SheetJS not on window')); } };
+    s.onerror = () => { if (!done) { done = true; reject(new Error('Failed to load SheetJS from cdn.sheetjs.com')); } };
+    setTimeout(() => { if (!done) { done = true; reject(new Error('CDN load timeout (12 s)')); } }, 12000);
+    document.head.appendChild(s);
+  });
+}
+
 export async function readWorkbookToGrid(file) {
   const name = file.name.toLowerCase();
   if (name.endsWith('.csv')) {
     const text = await file.text();
     return text.replace(/\r\n?/g, '\n').split('\n').map((l) => l.split(','));
   }
-  const ExcelJS = await loadExcelJS();
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(await file.arrayBuffer());
+  const XLSX = await loadSheetJS();
+  const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true, dense: false });
 
+  // Choose the sheet that best looks like a grouping trial balance: score a
+  // header row by how many of the KEY fields (ledger, face, note, subNote) it
+  // carries — NOT by row count. A T_B sheet with all four beats a Notes sheet
+  // that merely has a "Particulars"/"Name of Ledger" column.
+  const KEY_FIELDS = ['ledger', 'face', 'note', 'subNote'];
   let bestGrid = null, bestScore = -1;
-  wb.eachSheet((ws) => {
-    const grid = [];
-    ws.eachRow({ includeEmpty: false }, (row) => {
-      const arr = [];
-      row.eachCell({ includeEmpty: true }, (cell, col) => {
-        let v = cell.value;
-        if (v && typeof v === 'object') v = v.result ?? v.text ?? v.richText?.map((t) => t.text).join('') ?? '';
-        arr[col - 1] = v == null ? '' : v;
-      });
-      grid.push(arr);
-    });
-    // Score: does any of the first 15 rows look like a ledger header?
-    let score = 0;
+  for (const sheetName of wb.SheetNames) {
+    const ws = wb.Sheets[sheetName];
+    if (!ws) continue;
+    const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '', blankrows: true });
+    let fields = 0;
     for (let r = 0; r < Math.min(grid.length, 15); r++) {
-      if ((grid[r] || []).some((c) => HEADER_ALIASES[norm(c)] === 'ledger')) { score = 1000 + grid.length; break; }
+      const hit = new Set();
+      (grid[r] || []).forEach((c) => { const k = HEADER_ALIASES[norm(c)]; if (KEY_FIELDS.includes(k)) hit.add(k); });
+      if (hit.has('ledger')) fields = Math.max(fields, hit.size);
     }
-    if (score === 0) score = grid.length; // fallback: biggest sheet
+    // Primary: field richness (needs ledger). Fallback: biggest sheet (÷1e5 so it never outranks a real match).
+    const score = fields > 0 ? fields * 1e6 + grid.length : grid.length / 1e5;
     if (score > bestScore) { bestScore = score; bestGrid = grid; }
-  });
+  }
   return bestGrid || [];
 }
