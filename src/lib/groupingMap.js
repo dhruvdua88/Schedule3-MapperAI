@@ -354,9 +354,12 @@ export async function mapGroupings({
 
   const results = rows.map((r) => byIdx.get(r.idx)).filter(Boolean);
 
-  // Deterministic presentation pass: first normalise each sub-note's surface
-  // form (casing/spacing/noise), then unify spelling within each bucket so
-  // word-order / plural / punctuation variants collapse to ONE line.
+  // Deterministic presentation pass, in order:
+  //  (a) canonical sub-notes for well-known statutory/tax patterns (reproducible,
+  //      collapses AI wording drift for the biggest clusters);
+  //  (b) surface-form normalise (casing/spacing/noise);
+  //  (c) token-set canonicalise within each bucket (word-order/plural/status).
+  const deterministicSubNotes = applyDeterministicSubNotes(results);
   for (const r of results) if (r.subNote) r.subNote = formatSubNote(r.subNote);
   const subNoteMerges = canonicalizeSubNotes(results);
 
@@ -368,9 +371,53 @@ export async function mapGroupings({
     review: results.filter((r) => r.status === 'review').length,
     subNoteGroups: new Set(results.map((r) => r.subNote).filter(Boolean)).size,
     subNoteMerges,
+    deterministicSubNotes,
   };
 
   return { results, stats };
+}
+
+// ---- Deterministic sub-note dictionary (well-known statutory/tax lines) --
+// For the highest-frequency, unambiguous ledger patterns, force a single
+// canonical sub-note so presentation is REPRODUCIBLE run-to-run and every
+// sibling collapses to one line — e.g. all input-GST/ITC ledgers (however
+// worded) become "GST Input Credit". Keyed on the ledger name AND the face
+// SIDE (asset vs liability) so an expense like "Admin Charges on PF" is never
+// mislabelled "PF Payable". Only overrides when the pattern is unmistakable.
+const _ASSET_FACES = new Set([
+  'Property Plant and Equipment', 'Intangible assets', 'Capital work in progress',
+  'Intangible assets under development', 'Non current investments', 'Current investments',
+  'Deferred tax assets net', 'Long term loans and advances', 'Short term loans and advances',
+  'Other non current assets', 'Other current assets', 'Inventories', 'Trade receivables',
+  'Cash and Cash Equivalents',
+]);
+const _LIAB_FACES = new Set([
+  'Other current liabilities', 'Other Long term liabilities',
+  'Short term provisions', 'Long term provisions',
+]);
+// { re: ledger test, side: 'asset'|'liab', sub: canonical } — first match wins.
+const _DSUB_RULES = [
+  { re: /(input|itc)\s*(c|s|i|ut)?gst|(c|s|i|ut)?gst\s*(input|itc|credit)|\binput tax credit\b|\bitc\b/i, side: 'asset', sub: 'GST Input Credit' },
+  { re: /\btds\b|tax deducted at source/i,               side: 'asset', sub: 'TDS Receivable' },
+  { re: /\btds\b|\btcs\b|tax deducted|tax collected/i,   side: 'liab',  sub: 'TDS Payable' },
+  { re: /provident\s*fund|\bepf\b|\bp\.?f\.?\b/i,        side: 'liab',  sub: 'PF Payable' },
+  { re: /\besic?\b|employee'?s?\s*state\s*insurance/i,   side: 'liab',  sub: 'ESIC Payable' },
+  { re: /profession(al)?\s*tax|\bp\.?tax\b/i,            side: 'liab',  sub: 'Profession Tax Payable' },
+];
+export function applyDeterministicSubNotes(results) {
+  let n = 0;
+  for (const r of results) {
+    if (!r.face || AGGREGATE_FACES.has(r.face)) continue;   // aggregate faces carry no sub-note
+    const side = _ASSET_FACES.has(r.face) ? 'asset' : _LIAB_FACES.has(r.face) ? 'liab' : null;
+    if (!side) continue;                                    // expense/income/equity — leave AI's label
+    const hit = _DSUB_RULES.find((rule) => rule.side === side && rule.re.test(r.ledger));
+    if (hit && r.subNote !== hit.sub) {
+      r.subNote = hit.sub;
+      if (!r.flags.includes('deterministic sub-note')) r.flags.push('deterministic sub-note');
+      n++;
+    }
+  }
+  return n;
 }
 
 // ---- Deterministic sub-note presentation formatting ---------------------
