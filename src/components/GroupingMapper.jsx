@@ -24,17 +24,19 @@ import {
   toGroupingTSV, toFullTSV, downloadMappingExcel,
 } from '../lib/groupingMap.js';
 
-const SAMPLE = `Name of Ledger\tAmount\tFace Grouping\tNote Grouping\tSub-Note Grouping
-TDS Payable - 194C\t-45000
-TDS Payable - 194J\t-32000
-TDS Payable - 194Q\t-18000
-GST Payable\t-206919
-Profession Tax Payable\t-3600
-ESIC Payable\t-8972
-Provident Fund Payable\t-14500
-Audit Fees Payable\t-50000
-Equity Share Capital\t-102010\tShare capital\tIssued Equity Share Capital
-HDFC Bank - Current A/c\t340000`;
+const SAMPLE = `System Primary Grouping\tName of Ledger\tAmount\tFace Grouping\tNote Grouping\tSub-Note Grouping
+Duties & Taxes\tTDS Payable - 194C\t-45000
+Duties & Taxes\tTDS Payable - 194J\t-32000
+Duties & Taxes\tGST Payable\t-206919
+Duties & Taxes\tProfession Tax Payable\t-3600
+Duties & Taxes\tESIC Payable\t-8972
+Duties & Taxes\tProvident Fund Payable\t-14500
+Current Liabilities\tAudit Fees Payable\t-50000
+Capital Account\tEquity Share Capital\t-102010\tShare capital\tIssued Equity Share Capital
+Bank Accounts\tHDFC Bank - Current A/c\t340000
+Bank OD A/c\tICICI Bank Ltd OD-3967\t-931030
+Sundry Debtors\tBharti Airtel Limited\t1250000
+Deposits (Asset)\tRent Deposit - Noida\t85000`;
 
 function copyToClipboard(text) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);

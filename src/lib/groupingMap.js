@@ -200,6 +200,26 @@ RULES
      current assets -> "Short term borrowings" > "Secured Loans repayable on
      demand from banks" (NOT the Unsecured line). Interest on OD -> "Finance
      costs" > "Interest expense".
+3b. The Tally "sysGroup" (primary > parent group) is STRONG evidence for the
+   FACE — trust it unless the ledger name clearly contradicts:
+     Sundry Creditors -> "Trade payables due to others" (or MSME if micro/small)
+     Sundry Debtors -> "Trade receivables"
+     Duties & Taxes -> credit: "Other current liabilities">"Statutory dues";
+       debit (input/ITC): "Other current assets">"Others"
+     Fixed Assets -> "Property Plant and Equipment" / "Intangible assets"
+     Loans & Advances (Asset) -> short/long "... loans and advances"
+     Deposits (Asset) -> "Other non current assets">"Security Deposits"
+     Bank OD A/c / Secured Loans -> "Short term borrowings">"Secured Loans
+       repayable on demand from banks"; Unsecured Loans -> the Unsecured lines
+     Bank Accounts -> "Cash and Cash Equivalents">"Balances with banks in
+       current accounts"; Cash-in-hand -> "Cash on hand"
+     Capital Account -> "Share capital" / "Reserves and surplus"
+     Provisions -> "Short term provisions"/"Long term provisions"
+     Direct/Purchase -> COGS/purchases faces; Indirect Expenses -> "Other
+       expenses"; Sales -> "Revenue from operations"; Indirect Incomes ->
+       "Other Income".
+   Use the amount SIGN and ledger name to choose current vs non-current and the
+   exact allowed note within that face.
    - When still genuinely unsure of the note, use the face's catch-all that IS in
      its list — "Other payables" / "Others" / "Other Expenses" / "Specify at level
      3" — rather than returning an empty note.
