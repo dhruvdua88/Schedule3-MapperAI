@@ -157,7 +157,8 @@ export function GroupingMapper() {
       const next = { ...r, ...patch };
       if (patch.face !== undefined) {
         // face changed → note may no longer be valid
-        if (!NOTES_BY_FACE[next.face]?.includes(next.note)) next.note = '';
+        const opts = NOTES_BY_FACE[next.face] || [];
+        if (!opts.includes(next.note)) next.note = opts.length === 1 ? opts[0] : '';
         next.status = next.face && next.note ? 'ok' : 'review';
       }
       if (patch.note !== undefined) next.status = next.face && next.note ? 'ok' : 'review';

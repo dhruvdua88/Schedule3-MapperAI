@@ -199,6 +199,12 @@ function validateMapping(row, m) {
     flags.push('face not in vocabulary');
   } else {
     note = canonicalNote(face, m?.note) || canonicalNote(face, row.curNote);
+    // Deterministic fallback: if the face has exactly one valid note (e.g.
+    // "Other current assets" -> "Specify at Level 3"), assign it — no ambiguity.
+    if (!note) {
+      const opts = NOTES_BY_FACE[face] || [];
+      if (opts.length === 1) note = opts[0];
+    }
     if (!note) { status = 'review'; flags.push('note not valid for face'); }
     else code = codeFor(face, note);
   }
