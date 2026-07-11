@@ -213,6 +213,10 @@ RULES
      ageing schedule, NOT by individual party. Never put a party name there.
    - Otherwise where a ledger must be shown by name (related-party loans,
      individual directors, specific investments), use the cleaned ledger name.
+   - SUFFIX CONSISTENCY: for a liability-side note end the label "... Payable"
+     (never "Dues"/"Outstanding"); for an asset-side note use "... Receivable" or
+     "Advance to ...". Keep the SAME suffix for every sibling so they render as
+     one line, e.g. always "Credit Card Payable" (not sometimes "Credit Card Dues").
    - Title Case, <= 6 words, no trailing punctuation, consistent across siblings.
 6. confidence: 0-1. reason: <= 12 words, why this head/note.
 
@@ -233,6 +237,14 @@ const AGGREGATE_FACES = new Set([
   'Trade receivables',
 ]);
 
+// Generic "bucket" notes, in preference order — used to complete a valid face
+// whose note the AI left blank, so the paste is never incomplete. All are real
+// dropdown values; only assigned when present in that face's allowed list.
+const CATCHALL_NOTES = [
+  'Other payables', 'Others', 'Other Expenses', 'Other investments',
+  'Other non-current investments', 'Miscellaneous expenses', 'Specify at level 3',
+];
+
 function validateMapping(row, m) {
   const face = canonicalFace(m?.face) || canonicalFace(row.curFace);
   let note = '', status = 'ok', flags = [];
@@ -242,13 +254,18 @@ function validateMapping(row, m) {
     flags.push('face not in the tool\'s Face list');
   } else {
     note = canonicalNote(face, m?.note) || canonicalNote(face, row.curNote);
+    const opts = NOTES_BY_FACE[face] || [];
     // Deterministic fallback: if the face's dependent dropdown has exactly one
-    // valid note (e.g. "Capture from FAR"), assign it — no ambiguity.
+    // valid note (e.g. "Captured from FAR"), assign it — no ambiguity.
+    if (!note && opts.length === 1) note = opts[0];
+    // Catch-all: a valid face but a note the AI left blank must not paste empty.
+    // Assign the face's generic bucket note (still in-vocab) and flag it so the
+    // reviewer confirms — never leave a resolvable face with an empty note.
     if (!note) {
-      const opts = NOTES_BY_FACE[face] || [];
-      if (opts.length === 1) note = opts[0];
+      const catchAll = CATCHALL_NOTES.find((c) => opts.includes(c));
+      if (catchAll) { note = catchAll; flags.push('catch-all note assigned — confirm'); }
     }
-    if (!note) { status = 'review'; flags.push('note not in this face\'s allowed list'); }
+    if (!note) { status = 'review'; flags.push('no note could be assigned for this face'); }
   }
 
   // Faces that are presented in AGGREGATE (with an ageing / MSME-vs-others
@@ -404,7 +421,11 @@ export function formatSubNote(raw) {
 // items keep different token sets (CGST vs IGST, TDS vs TCS) and are NOT merged.
 const _SUBNOTE_STOP = new Set([
   'the', 'a', 'an', 'to', 'of', 'and', 'for', 'on', 'in', 'as',
+  // status / polarity suffixes — same concept whether written "Dues", "Payable",
+  // "Outstanding" or "Paid" (e.g. "Credit Card Dues" == "Credit Card Payable",
+  // "Custom Duty" == "Custom Duty Paid"). Dropping them merges the split line.
   'payable', 'payables', 'receivable', 'receivables',
+  'due', 'dues', 'outstanding', 'paid', 'payment', 'recoverable',
   'ac', 'account', 'accounts',
 ]);
 function subNoteKey(s) {
