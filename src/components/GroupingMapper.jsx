@@ -44,8 +44,8 @@ function copyToClipboard(text) {
   return Promise.resolve();
 }
 
-const fmtAmt = (n) =>
-  n == null ? '' : new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(n);
+const AMT_FMT = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+const fmtAmt = (n) => (n == null ? '' : AMT_FMT.format(n));
 
 // ---- small building blocks ----------------------------------------------
 function Stat({ label, value, color }) {
@@ -230,12 +230,15 @@ export function GroupingMapper() {
               }}
             />
             <button
+              type="button"
+              aria-label={showKey ? 'Hide API key' : 'Show API key'}
               onClick={() => setShowKey((s) => !s)}
               style={{ position: 'absolute', right: 6, top: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: COLORS.TEXT_FAINT, fontSize: 11 }}
             >{showKey ? 'hide' : 'show'}</button>
           </div>
           <select
             value={model}
+            aria-label="DeepSeek model"
             onChange={(e) => chooseModel(e.target.value)}
             style={{ padding: '8px 10px', background: COLORS.BG_CREAM, border: `1px solid ${COLORS.BORDER_STRONG}`, borderRadius: 5, fontSize: 13, fontFamily: FONTS.BODY, color: COLORS.TEXT }}
           >
@@ -366,7 +369,7 @@ export function GroupingMapper() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
             <div style={{ display: 'inline-flex', border: `1px solid ${COLORS.BORDER_STRONG}`, borderRadius: 8, overflow: 'hidden' }}>
               {[['rows', 'Ledger view'], ['subnotes', 'Sub-note groups']].map(([k, lbl]) => (
-                <button key={k} onClick={() => setView(k)}
+                <button key={k} type="button" onClick={() => setView(k)}
                   style={{ padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12.5, fontFamily: FONTS.BODY,
                     background: view === k ? COLORS.PRIMARY : 'transparent', color: view === k ? '#faf6ee' : COLORS.TEXT_MUTED }}>
                   {lbl}
@@ -377,7 +380,7 @@ export function GroupingMapper() {
               <>
                 <div style={{ display: 'inline-flex', gap: 4 }}>
                   {[['all', 'All'], ['fill', 'Filled'], ['change', 'Changed'], ['review', 'Review']].map(([k, lbl]) => (
-                    <button key={k} onClick={() => setFilter(k)}
+                    <button key={k} type="button" onClick={() => setFilter(k)}
                       style={{ padding: '6px 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontFamily: FONTS.BODY,
                         border: `1px solid ${filter === k ? COLORS.PRIMARY : COLORS.BORDER_STRONG}`,
                         background: filter === k ? COLORS.PRIMARY : 'transparent', color: filter === k ? '#faf6ee' : COLORS.TEXT_MUTED }}>
@@ -387,7 +390,7 @@ export function GroupingMapper() {
                 </div>
                 <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: 300 }}>
                   <Search size={14} style={{ position: 'absolute', left: 9, top: 9, color: COLORS.TEXT_FAINT }} />
-                  <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search ledgers…"
+                  <input value={query} aria-label="Search ledgers" onChange={(e) => setQuery(e.target.value)} placeholder="Search ledgers…"
                     style={{ width: '100%', padding: '7px 10px 7px 30px', background: COLORS.BG_CREAM, border: `1px solid ${COLORS.BORDER_STRONG}`, borderRadius: 6, fontSize: 12.5, fontFamily: FONTS.BODY, color: COLORS.TEXT, boxSizing: 'border-box' }} />
                 </div>
               </>
@@ -437,19 +440,19 @@ function RowsTable({ rows, onEdit }) {
                 </td>
                 <td style={{ padding: '7px 10px', fontSize: 12, textAlign: 'right', fontFamily: FONTS.MONO, color: r.amount < 0 ? COLORS.CRIT : COLORS.TEXT }}>{fmtAmt(r.amount)}</td>
                 <td style={{ padding: '6px 8px', minWidth: 170 }}>
-                  <select value={r.face} onChange={(e) => onEdit(r.idx, { face: e.target.value })} style={selStyle}>
+                  <select aria-label={`Face grouping for ${r.ledger}`} value={r.face} onChange={(e) => onEdit(r.idx, { face: e.target.value })} style={selStyle}>
                     <option value="">— select —</option>
                     {FACE_HEADS.map((f) => <option key={f} value={f}>{f}</option>)}
                   </select>
                 </td>
                 <td style={{ padding: '6px 8px', minWidth: 190 }}>
-                  <select value={r.note} onChange={(e) => onEdit(r.idx, { note: e.target.value })} style={selStyle} disabled={!r.face}>
+                  <select aria-label={`Note grouping for ${r.ledger}`} value={r.note} onChange={(e) => onEdit(r.idx, { note: e.target.value })} style={selStyle} disabled={!r.face}>
                     <option value="">— select —</option>
                     {(NOTES_BY_FACE[r.face] || []).map((n) => <option key={n} value={n}>{n}</option>)}
                   </select>
                 </td>
                 <td style={{ padding: '6px 8px', minWidth: 170 }}>
-                  <input value={r.subNote} onChange={(e) => onEdit(r.idx, { subNote: e.target.value })} style={selStyle} placeholder="presentation label" />
+                  <input aria-label={`Sub-note grouping for ${r.ledger}`} value={r.subNote} onChange={(e) => onEdit(r.idx, { subNote: e.target.value })} style={selStyle} placeholder="presentation label" />
                 </td>
                 <td style={{ padding: '7px 8px', textAlign: 'center', fontSize: 12, fontFamily: FONTS.MONO, color: COLORS.TEXT_MUTED }}>{r.code ?? '—'}</td>
                 <td style={{ padding: '7px 8px', textAlign: 'center' }}>

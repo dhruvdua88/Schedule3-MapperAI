@@ -30,6 +30,7 @@ export default function App() {
           return (
             <button
               key={key}
+              type="button"
               onClick={() => setMode(key)}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 7,
