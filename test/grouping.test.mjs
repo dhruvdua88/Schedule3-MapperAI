@@ -247,6 +247,15 @@ t('canonicalFace: aliases resolve; canonicalNote validates', () => {
 });
 
 // ---- parsePasted --------------------------------------------------------
+t('parsePasted: robust amount parsing (sign, currency, Cr/Dr, Indian grouping)', () => {
+  const amt = (a) => parsePasted('Name of Ledger\tAmount\nX\t' + a).rows[0].amount;
+  assert.equal(amt('₹ -45,000.50'), -45000.5, 'symbol before minus keeps sign');
+  assert.equal(amt('(2,06,919)'), -206919, 'bracket negative');
+  assert.equal(amt('45000 Cr'), -45000, 'Cr suffix = credit');
+  assert.equal(amt('45000 Dr'), 45000, 'Dr suffix = debit');
+  assert.equal(amt('Rs. -1000'), -1000);
+  assert.equal(amt('₹1,23,456'), 123456, 'Indian digit grouping');
+});
 t('parsePasted: detects columns + Tally group', () => {
   const p = parsePasted('System Primary Grouping\tName of Ledger\tAmount\tFace Grouping\nDuties & Taxes\tGST Payable\t-1000\tOther current liabilities');
   assert.equal(p.rows.length, 1);

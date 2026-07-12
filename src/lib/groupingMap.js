@@ -47,17 +47,24 @@ function norm(s) {
   return String(s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-// Parse a number that may be "(1,234.50)" (bracket-negative) or "-1234.5" or "".
+// Parse an amount robustly. Handles "(1,234.50)" (bracket-negative), a leading OR
+// symbol-preceded minus ("-1234.5", "₹ -45,000", "Rs. -1000"), Indian digit
+// grouping, currency symbols/words (₹ $ € £ Rs INR), and Tally's Cr/Dr suffix
+// convention (credit = negative, debit = positive). The SIGN matters — it drives
+// the asset/liability sign checks — so a symbol before the minus must not flip it.
 function parseAmt(v) {
   if (v == null || v === '') return null;
   if (typeof v === 'number') return v;
   let s = String(v).trim().replace(/,/g, '');
   let neg = false;
   if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
-  if (s.startsWith('-')) { neg = true; s = s.slice(1); }
+  const isDr = /\bdr\b/i.test(s);                 // explicit debit overrides to positive
+  if (/\bcr\b/i.test(s)) neg = true;              // "45000 Cr" = credit = negative
+  s = s.replace(/[₹$€£]|\brs\.?|\binr\b|\bcr\b|\bdr\b/gi, '').trim();
+  if (s.includes('-')) neg = true;               // minus anywhere (after symbol strip)
   const n = parseFloat(s.replace(/[^0-9.]/g, ''));
   if (!isFinite(n)) return null;
-  return neg ? -n : n;
+  return (neg && !isDr) ? -n : n;
 }
 
 /**
