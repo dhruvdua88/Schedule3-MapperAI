@@ -655,12 +655,25 @@ export function toGroupingTSV(results) {
     .join('\n');
 }
 
-/** Full review TSV incl. ledger, amount and code — for records / re-paste with a key column. */
+/** Human-readable, reviewer-ACTIONABLE flags for a row — the QC signals worth a
+ *  second look (sign/Tally anomalies, catch-all confirm, AI failure) so they
+ *  travel into the exported working paper. Internal/informational flags
+ *  ("sub-note blank", "deterministic ...") are omitted. "; "-joined; empty when
+ *  clean. */
+const _EXPORT_FLAG_DROP = /^(sub-note blank|deterministic sub-note|deterministic note)$/;
+export function reviewFlagsText(r) {
+  return (r.flags || [])
+    .filter((f) => !_EXPORT_FLAG_DROP.test(f))
+    .map((f) => f.startsWith('verify: ') ? f.slice(8) : f)
+    .join('; ');
+}
+
+/** Full review TSV incl. ledger, amount and QC flags — for records / re-paste with a key column. */
 export function toFullTSV(results) {
-  const head = ['Name of Ledger', 'Amount', 'Face Grouping', 'Note Grouping', 'Sub-Note Grouping', 'Action', 'Confidence', 'Reason'];
+  const head = ['Name of Ledger', 'Amount', 'Face Grouping', 'Note Grouping', 'Sub-Note Grouping', 'Action', 'Confidence', 'Reason', 'Review Flags'];
   const body = results.map((r) => [
     r.ledger, r.amount ?? '', r.face, r.note, r.subNote,
-    r.action, r.confidence ?? '', r.reason,
+    r.action, r.confidence ?? '', r.reason, reviewFlagsText(r).replace(/\t/g, ' '),
   ].join('\t'));
   return [head.join('\t'), ...body].join('\n');
 }
@@ -699,23 +712,30 @@ export async function downloadMappingExcel(results, companyName = 'Grouping') {
     { header: 'Action', key: 'action', width: 10 },
     { header: 'Confidence', key: 'conf', width: 11 },
     { header: 'Reason', key: 'reason', width: 40 },
+    { header: 'Review Flags', key: 'flags', width: 44 },
   ];
   ws.getRow(1).font = { bold: true };
   ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3D2E' } };
   ws.getRow(1).font = { bold: true, color: { argb: 'FFFAF6EE' } };
   results.forEach((r) => {
+    const flagsText = reviewFlagsText(r);
     const row = ws.addRow({
       ledger: r.ledger, amount: r.amount ?? '', face: r.face, note: r.note,
       sub: r.subNote, action: r.action,
-      conf: r.confidence ?? '', reason: r.reason,
+      conf: r.confidence ?? '', reason: r.reason, flags: flagsText,
     });
     if (r.status === 'review') {
       row.eachCell((c) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDF3F0' } }; });
     } else if (r.action === 'fill') {
       row.getCell('sub').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F7EE' } };
     }
+    // Amber-tint the Review Flags cell when a verify/anomaly flag is present.
+    if (/balance unusual|Tally group|catch-all/.test(flagsText)) {
+      row.getCell('flags').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDF6ED' } };
+      row.getCell('flags').font = { color: { argb: 'FFA85D1A' } };
+    }
   });
-  ws.autoFilter = 'A1:I1';
+  ws.autoFilter = 'A1:J1';
   ws.views = [{ state: 'frozen', ySplit: 1 }];
 
   const buf = await wb.xlsx.writeBuffer();
