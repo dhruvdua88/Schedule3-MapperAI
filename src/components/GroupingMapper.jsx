@@ -187,8 +187,9 @@ export function GroupingMapper() {
     const map = new Map();
     results.forEach((r) => {
       const k = `${r.face}||${r.note}||${r.subNote}`;
-      if (!map.has(k)) map.set(k, { face: r.face, note: r.note, subNote: r.subNote, ledgers: [], total: 0 });
+      if (!map.has(k)) map.set(k, { face: r.face, note: r.note, subNote: r.subNote, ledgers: [], total: 0, immaterial: false });
       const g = map.get(k); g.ledgers.push(r.ledger); g.total += r.amount || 0;
+      if ((r.flags || []).includes('immaterial')) g.immaterial = true;
     });
     return [...map.values()].sort((a, b) =>
       (a.face || '').localeCompare(b.face || '') || (a.note || '').localeCompare(b.note || '') || (a.subNote || '').localeCompare(b.subNote || ''));
@@ -521,8 +522,11 @@ function SubNotePanel({ groups }) {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <tbody>
                     {subs.map((s) => (
-                      <tr key={s.subNote} style={{ borderBottom: `1px solid ${COLORS.BORDER}` }}>
-                        <td style={{ padding: '6px 8px', fontSize: 13, color: COLORS.TEXT, width: '38%' }}>{s.subNote || <span style={{ color: COLORS.TEXT_FAINT }}>(blank)</span>}</td>
+                      <tr key={s.subNote} style={{ borderBottom: `1px solid ${COLORS.BORDER}`, opacity: s.immaterial ? 0.62 : 1 }}>
+                        <td style={{ padding: '6px 8px', fontSize: 13, color: COLORS.TEXT, width: '38%' }}>
+                          {s.subNote || <span style={{ color: COLORS.TEXT_FAINT }}>(blank)</span>}
+                          {s.immaterial && <span title="Singleton < 1% of note total — consider grouping into Others" style={{ marginLeft: 6, fontSize: 9.5, color: COLORS.HIGH, border: `1px solid ${COLORS.HIGH}`, borderRadius: 4, padding: '0 4px', verticalAlign: 'middle' }}>immaterial</span>}
+                        </td>
                         <td style={{ padding: '6px 8px', fontSize: 11.5, color: COLORS.TEXT_FAINT }}>{s.ledgers.length} ledger{s.ledgers.length > 1 ? 's' : ''}: {s.ledgers.slice(0, 4).join(', ')}{s.ledgers.length > 4 ? '…' : ''}</td>
                         <td style={amtStyle(s.total)}>{fmtAmt(s.total)}</td>
                       </tr>

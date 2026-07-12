@@ -389,6 +389,8 @@ export async function mapGroupings({
   const deterministicSubNotes = applyDeterministicSubNotes(results);
   for (const r of results) if (r.subNote) r.subNote = formatSubNote(r.subNote);
   const subNoteMerges = canonicalizeSubNotes(results);
+  // Materiality runs LAST — on the final, canonicalised sub-notes.
+  const immaterialSubNotes = flagImmaterialSubNotes(results);
 
   const stats = {
     total: results.length,
@@ -402,6 +404,7 @@ export async function mapGroupings({
     deterministicNotes,
     tallyReviewFlags,
     signReviewFlags,
+    immaterialSubNotes,
   };
 
   return { results, stats };
@@ -475,6 +478,47 @@ export function flagTallyReview(results) {
       const msg = `verify: Tally group "${grp}" suggests ${expect[0]}`;
       if (!r.flags.includes(msg)) r.flags.push(msg);
       n++;
+    }
+  }
+  return n;
+}
+
+// ---- Materiality review flags (presentation, non-mutating) --------------
+// On the face of the BS a note with many tiny singleton sub-notes reads badly;
+// standard practice rolls immaterial items into an "Others" line. Flag a
+// singleton sub-note (one ledger) whose amount is < MATERIAL_PCT of its note's
+// total, but ONLY inside a busy note (>= MIN_LINES distinct sub-notes) where
+// consolidation actually improves presentation. Never touches the value — the
+// reviewer decides whether to group. Aggregate faces (blank sub-notes) skipped.
+const _MATERIAL_PCT = 0.01;     // < 1% of the note total
+const _MIN_LINES = 5;           // only worth it when the note has many lines
+export function flagImmaterialSubNotes(results) {
+  // Build per-note stats: distinct sub-notes, note total, and per-sub totals+count.
+  const notes = new Map();       // face|note -> { total, subs: Map(sub -> {total,count}) }
+  for (const r of results) {
+    if (!r.subNote || !r.face || AGGREGATE_FACES.has(r.face)) continue;
+    const key = `${r.face}|${r.note}`;
+    if (!notes.has(key)) notes.set(key, { total: 0, subs: new Map() });
+    const nb = notes.get(key);
+    nb.total += r.amount || 0;
+    const sb = nb.subs.get(r.subNote) || { total: 0, count: 0 };
+    sb.total += r.amount || 0; sb.count += 1;
+    nb.subs.set(r.subNote, sb);
+  }
+  const immaterial = new Set();   // face|note|sub keys that qualify
+  for (const [key, nb] of notes) {
+    if (nb.subs.size < _MIN_LINES || Math.abs(nb.total) === 0) continue;
+    const floor = Math.abs(nb.total) * _MATERIAL_PCT;
+    for (const [sub, sb] of nb.subs) {
+      // Non-zero but tiny singleton — a nil (0) balance is "empty", not immaterial.
+      if (sb.count === 1 && Math.abs(sb.total) > 0 && Math.abs(sb.total) < floor) immaterial.add(`${key}|${sub}`);
+    }
+  }
+  let n = 0;
+  for (const r of results) {
+    if (!r.subNote) continue;
+    if (immaterial.has(`${r.face}|${r.note}|${r.subNote}`)) {
+      if (!r.flags.includes('immaterial')) { r.flags.push('immaterial'); n++; }
     }
   }
   return n;
@@ -660,7 +704,7 @@ export function toGroupingTSV(results) {
  *  travel into the exported working paper. Internal/informational flags
  *  ("sub-note blank", "deterministic ...") are omitted. "; "-joined; empty when
  *  clean. */
-const _EXPORT_FLAG_DROP = /^(sub-note blank|deterministic sub-note|deterministic note)$/;
+const _EXPORT_FLAG_DROP = /^(sub-note blank|deterministic sub-note|deterministic note|immaterial)$/;
 export function reviewFlagsText(r) {
   return (r.flags || [])
     .filter((f) => !_EXPORT_FLAG_DROP.test(f))

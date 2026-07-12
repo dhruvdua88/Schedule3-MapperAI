@@ -10,7 +10,7 @@
 import assert from 'node:assert/strict';
 import {
   formatSubNote, canonicalizeSubNotes, applyDeterministicSubNotes,
-  applyDeterministicNotes, flagSignAnomalies, flagTallyReview,
+  applyDeterministicNotes, flagSignAnomalies, flagTallyReview, flagImmaterialSubNotes,
   parsePasted, reviewFlagsText,
 } from '../src/lib/groupingMap.js';
 import { canonicalFace, canonicalNote, NOTES_BY_FACE } from '../src/data/sch3Vocab.js';
@@ -117,6 +117,28 @@ t('flagTallyReview: contradiction flagged, agreement clean', () => {
   assert.match(rows[0].flags.join(), /Fixed Assets/);
   assert.equal(rows[1].flags.length, 0);
   assert.equal(rows[2].flags.length, 0);
+});
+
+// ---- flagImmaterialSubNotes ---------------------------------------------
+t('flagImmaterialSubNotes: tiny singleton in busy note flagged; big/multi/small-note clean', () => {
+  const F = 'Other current liabilities', N = 'Other payables';
+  const rows = [
+    row({ face: F, note: N, subNote: 'Big Item', ledger: 'A', amount: -1000000 }),
+    row({ face: F, note: N, subNote: 'Item 2', ledger: 'B', amount: -500000 }),
+    row({ face: F, note: N, subNote: 'Item 3', ledger: 'C', amount: -300000 }),
+    row({ face: F, note: N, subNote: 'Item 4', ledger: 'D', amount: -200000 }),
+    row({ face: F, note: N, subNote: 'Tiny', ledger: 'E', amount: -500 }),        // singleton, <1% -> flag
+    row({ face: F, note: N, subNote: 'Multi', ledger: 'F', amount: -100 }),       // shares...
+    row({ face: F, note: N, subNote: 'Multi', ledger: 'G', amount: -100 }),       // ...so not singleton -> clean
+    // a different note with only 2 lines -> below MIN_LINES -> never flagged
+    row({ face: F, note: 'Statutory dues', subNote: 'X', ledger: 'H', amount: -10 }),
+    row({ face: F, note: 'Statutory dues', subNote: 'Y', ledger: 'I', amount: -99999 }),
+  ];
+  flagImmaterialSubNotes(rows);
+  assert.ok(rows[4].flags.includes('immaterial'), 'tiny singleton flagged');
+  assert.ok(!rows[0].flags.includes('immaterial'), 'big item clean');
+  assert.ok(!rows[5].flags.includes('immaterial') && !rows[6].flags.includes('immaterial'), 'multi-ledger sub-note clean');
+  assert.ok(!rows[7].flags.includes('immaterial'), 'small note (< MIN_LINES) never flagged');
 });
 
 // ---- reviewFlagsText (export filter) ------------------------------------
