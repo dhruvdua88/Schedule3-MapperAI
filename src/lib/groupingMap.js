@@ -38,6 +38,9 @@ const HEADER_ALIASES = {
   'note grouping current year': 'note', 'note': 'note',
   'sub-note grouping_current year': 'subNote', 'sub-note grouping': 'subNote',
   'sub note grouping': 'subNote', 'subnote': 'subNote', 'sub-note': 'subNote',
+  // Previous-year grouping — used for a year-over-year consistency check.
+  'face grouping_previous year': 'pyFace', 'face grouping previous year': 'pyFace',
+  'note grouping_previous year': 'pyNote', 'note grouping previous year': 'pyNote',
 };
 
 function norm(s) {
@@ -117,6 +120,8 @@ export function parseGrid(grid) {
       curFace: cols.face    != null ? String(row[cols.face]    ?? '').trim() : '',
       curNote: cols.note    != null ? String(row[cols.note]    ?? '').trim() : '',
       curSub:  cols.subNote != null ? String(row[cols.subNote] ?? '').trim() : '',
+      pyFace:  cols.pyFace  != null ? String(row[cols.pyFace]  ?? '').trim() : '',
+      pyNote:  cols.pyNote  != null ? String(row[cols.pyNote]  ?? '').trim() : '',
     });
   }
   return { rows, cols, headerRow, amountCol };
@@ -154,6 +159,8 @@ function buildUserPrompt(chunk) {
     curFace: r.curFace || undefined,
     curNote: r.curNote || undefined,
     curSub: r.curSub || undefined,
+    pyFace: r.pyFace || undefined,
+    pyNote: r.pyNote || undefined,
   }));
 
   return `You are filling the Schedule III Automation Tool's grouping columns. The
@@ -241,6 +248,9 @@ RULES
 4. If curFace/curNote are already present AND valid (appear verbatim in the lists),
    KEEP them unless clearly wrong; then action:"keep". If blank, action:"fill".
    If you correct a wrong/unlisted value, action:"change".
+4a. pyFace/pyNote (if given) are LAST YEAR's grouping — a strong prior. When
+   curFace/curNote are blank, prefer last year's grouping unless the ledger's
+   nature clearly changed (consistency of presentation year over year).
 5. subNote — Level 3, drafted by YOU for clean balance-sheet presentation:
    - GROUP similar ledgers under ONE shared, well-worded label so the note reads
      well. Examples: all TDS/TCS ledgers -> "TDS / TCS Payable"; PF & ESI ->
@@ -402,6 +412,7 @@ export async function mapGroupings({
   const tallyReviewFlags = flagTallyReview(results);
   const signReviewFlags = flagSignAnomalies(results);
   const provisionFlags = flagProvisionPlacement(results);
+  const yoyReclassFlags = flagYoyReclassification(results);
   const deterministicSubNotes = applyDeterministicSubNotes(results);
   for (const r of results) if (r.subNote) r.subNote = formatSubNote(r.subNote);
   const subNoteMerges = canonicalizeSubNotes(results);
@@ -423,10 +434,33 @@ export async function mapGroupings({
     tallyReviewFlags,
     signReviewFlags,
     provisionFlags,
+    yoyReclassFlags,
     immaterialSubNotes,
   };
 
   return { results, stats };
+}
+
+// ---- Year-over-year reclassification flag (quality control, non-mutating) -
+// If the trial balance carries previous-year groupings (T_B cols O/P), a ledger
+// whose CURRENT-year Face/Note differs from last year's is a reclassification —
+// a standard audit red flag (consistency of presentation). Flag it for the
+// reviewer; never change the value. No PY columns -> no-op.
+export function flagYoyReclassification(results) {
+  let n = 0;
+  for (const r of results) {
+    const pf = canonicalFace(r.pyFace);
+    if (!pf || !r.face) continue;                       // no PY grouping to compare
+    const faceChanged = pf !== r.face;
+    const pn = canonicalNote(r.face, r.pyNote);
+    const noteChanged = !faceChanged && pn && r.note && pn !== r.note;
+    if (faceChanged || noteChanged) {
+      const was = faceChanged ? r.pyFace : `${r.pyFace} > ${r.pyNote}`;
+      const msg = `verify: reclassified from last year (was ${was})`;
+      if (!r.flags.includes(msg)) { r.flags.push(msg); n++; }
+    }
+  }
+  return n;
 }
 
 // ---- Provision-placement review flag (quality control, non-mutating) ----

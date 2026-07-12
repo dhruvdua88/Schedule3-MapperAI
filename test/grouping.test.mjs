@@ -11,7 +11,8 @@ import assert from 'node:assert/strict';
 import {
   formatSubNote, canonicalizeSubNotes, applyDeterministicSubNotes,
   applyDeterministicNotes, flagSignAnomalies, flagTallyReview, flagImmaterialSubNotes,
-  flagProvisionPlacement, stripRedundantSubNotes, parsePasted, reviewFlagsText,
+  flagProvisionPlacement, stripRedundantSubNotes, flagYoyReclassification,
+  parsePasted, reviewFlagsText,
 } from '../src/lib/groupingMap.js';
 import { canonicalFace, canonicalNote, NOTES_BY_FACE } from '../src/data/sch3Vocab.js';
 
@@ -210,6 +211,22 @@ t('flagProvisionPlacement: provision off Provisions face flagged; on-face + doub
   assert.equal(n, 1);
   assert.match(rows[0].flags.join(), /Short\/Long term provisions/);
   assert.equal(rows[1].flags.length, 0);
+  assert.equal(rows[2].flags.length, 0);
+  assert.equal(rows[3].flags.length, 0);
+});
+
+// ---- flagYoyReclassification --------------------------------------------
+t('flagYoyReclassification: face/note change flagged; same or no-PY clean', () => {
+  const rows = [
+    row({ ledger: 'A', face: 'Short term borrowings', note: 'x', pyFace: 'Long term borrowings', pyNote: 'y' }), // face changed -> flag
+    row({ ledger: 'B', face: 'Other current liabilities', note: 'Other payables', pyFace: 'Other current liabilities', pyNote: 'Statutory dues' }), // note changed -> flag
+    row({ ledger: 'C', face: 'Trade receivables', note: 'Unsecured considered good', pyFace: 'Trade receivables', pyNote: 'Unsecured considered good' }), // same -> clean
+    row({ ledger: 'D', face: 'Cash and Cash Equivalents', note: 'Cash on hand', pyFace: '', pyNote: '' }), // no PY -> clean
+  ];
+  const n = flagYoyReclassification(rows);
+  assert.equal(n, 2);
+  assert.match(rows[0].flags.join(), /reclassified from last year/);
+  assert.match(rows[1].flags.join(), /reclassified from last year/);
   assert.equal(rows[2].flags.length, 0);
   assert.equal(rows[3].flags.length, 0);
 });
