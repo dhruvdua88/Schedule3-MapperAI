@@ -196,6 +196,10 @@ export function GroupingMapper() {
   }, [results]);
 
   const acceptedTSV = results ? toGroupingTSV(results) : '';
+  const verifyCount = useMemo(
+    () => (results || []).filter((r) => (r.flags || []).some((f) => f.startsWith('verify:'))).length,
+    [results],
+  );
 
   // ============ RENDER ============
   return (
@@ -347,6 +351,11 @@ export function GroupingMapper() {
               <Stat label="Blanks filled" value={stats.filled} color={COLORS.LOW} />
               <Stat label="Reclassified" value={stats.changed} color={COLORS.HIGH} />
               <Stat label="Sub-note groups" value={stats.subNoteGroups} color={COLORS.PRIMARY} />
+              <div role="button" tabIndex={0} onClick={() => { if (verifyCount) { setView('rows'); setFilter('verify'); } }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && verifyCount) { setView('rows'); setFilter('verify'); } }}
+                style={{ cursor: verifyCount ? 'pointer' : 'default' }} title={verifyCount ? 'Show rows flagged to verify' : 'Nothing flagged'}>
+                <Stat label="To verify" value={verifyCount} color={verifyCount ? COLORS.HIGH : COLORS.TEXT_MUTED} />
+              </div>
               <Stat label="Needs review" value={stats.review} color={stats.review ? COLORS.CRIT : COLORS.TEXT_MUTED} />
               <div style={{ flex: 1 }} />
               <div style={{ display: 'flex', gap: 8, padding: 12, flexWrap: 'wrap' }}>
@@ -366,6 +375,16 @@ export function GroupingMapper() {
             <div style={{ marginBottom: 12, padding: '9px 12px', background: COLORS.CRIT_BG, border: `1px solid ${COLORS.CRIT}`, borderRadius: 6, color: COLORS.CRIT, fontSize: 12.5, display: 'flex', gap: 8 }}>
               <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
               {stats.review} ledger(s) need review — fix the Face/Note below before pasting. The G:I copy only includes accepted rows.
+            </div>
+          )}
+
+          {verifyCount > 0 && filter !== 'verify' && (
+            <div role="button" tabIndex={0}
+              onClick={() => { setView('rows'); setFilter('verify'); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { setView('rows'); setFilter('verify'); } }}
+              style={{ marginBottom: 12, padding: '9px 12px', background: COLORS.HIGH_BG, border: `1px solid ${COLORS.HIGH}`, borderRadius: 6, color: COLORS.HIGH, fontSize: 12.5, display: 'flex', gap: 8, cursor: 'pointer', alignItems: 'center' }}>
+              <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+              {verifyCount} ledger(s) flagged to verify (sign / Tally / provision) — valid to paste, but worth a second look. Click to filter.
             </div>
           )}
 
