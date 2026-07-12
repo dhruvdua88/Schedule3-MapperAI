@@ -42,6 +42,13 @@ t('formatSubNote: cases across punctuation (initials, parens, hyphens)', () => {
   assert.equal(formatSubNote('Consumables (gst)'), 'Consumables (GST)');
   assert.equal(formatSubNote('Adopt Net Tech Pvt Ltd(advance)'), 'Adopt Net Tech Pvt Ltd(Advance)');
 });
+t('formatSubNote: strips leading/trailing separators, collapses doubled', () => {
+  assert.equal(formatSubNote('- Delhi Electricity'), 'Delhi Electricity');
+  assert.equal(formatSubNote('Rent Noida -'), 'Rent Noida');
+  assert.equal(formatSubNote('Name , '), 'Name');
+  assert.equal(formatSubNote('& Something'), 'Something');
+  assert.equal(formatSubNote('Foo -- Bar'), 'Foo - Bar');
+});
 t('formatSubNote: consistent company suffixes', () => {
   assert.equal(formatSubNote('Bajaj Finance Limited'), 'Bajaj Finance Ltd');
   assert.equal(formatSubNote('Citius Communications Private Limited'), 'Citius Communications Pvt Ltd');

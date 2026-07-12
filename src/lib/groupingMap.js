@@ -718,6 +718,11 @@ export function formatSubNote(raw) {
        .replace(/\bLimited\b\.?/g, 'Ltd')
        .replace(/\bLtd\.\B/g, 'Ltd')
        .replace(/\bL\.?L\.?P\.?\b/gi, 'LLP');
+  // Defensive final polish: drop leading/trailing separators an upstream strip
+  // could leave (e.g. "- Delhi Electricity", "Rent Noida -", "Name ,") and
+  // collapse any doubled separators. A real label never starts/ends with these.
+  s = s.replace(/^[\s\-–—,.;:&/]+/, '').replace(/[\s\-–—,.;:&/]+$/, '');
+  s = s.replace(/\s*([-–—/])\s*\1+\s*/g, ' $1 ');   // "- -" / "//" -> single
   return s.replace(/\s{2,}/g, ' ').trim();
 }
 
