@@ -12,7 +12,7 @@ import {
   formatSubNote, canonicalizeSubNotes, applyDeterministicSubNotes,
   applyDeterministicNotes, flagSignAnomalies, flagTallyReview, flagImmaterialSubNotes,
   flagProvisionPlacement, stripRedundantSubNotes, flagYoyReclassification,
-  parsePasted, reviewFlagsText,
+  splitDelimited, parsePasted, reviewFlagsText,
 } from '../src/lib/groupingMap.js';
 import { canonicalFace, canonicalNote, NOTES_BY_FACE } from '../src/data/sch3Vocab.js';
 
@@ -255,6 +255,16 @@ t('parsePasted: robust amount parsing (sign, currency, Cr/Dr, Indian grouping)',
   assert.equal(amt('45000 Dr'), 45000, 'Dr suffix = debit');
   assert.equal(amt('Rs. -1000'), -1000);
   assert.equal(amt('₹1,23,456'), 123456, 'Indian digit grouping');
+});
+t('splitDelimited / CSV: quoted fields keep commas; tab passthrough', () => {
+  assert.deepEqual(splitDelimited('"Rao, Sanjay & Co","1,234.50",Other', ','), ['Rao, Sanjay & Co', '1,234.50', 'Other']);
+  assert.deepEqual(splitDelimited('"He said ""hi""",100', ','), ['He said "hi"', '100']);
+  assert.deepEqual(splitDelimited('A,B,C', ','), ['A', 'B', 'C']);
+  assert.deepEqual(splitDelimited('A\tB', '\t'), ['A', 'B']);
+  const p = parsePasted('Name of Ledger,Amount\n"Rao, Sanjay & Co","-1,234.50"\nGST,"-2,06,919"');
+  assert.equal(p.rows[0].ledger, 'Rao, Sanjay & Co');
+  assert.equal(p.rows[0].amount, -1234.5);
+  assert.equal(p.rows[1].amount, -206919);
 });
 t('parsePasted: amount detection robust to blank/text columns between', () => {
   // blank column between ledger and amount

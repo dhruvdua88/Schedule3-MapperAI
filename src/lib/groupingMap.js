@@ -153,12 +153,32 @@ export function parseGrid(grid) {
   return { rows, cols, headerRow, amountCol };
 }
 
+/** Split one delimited line, honouring double-quoted fields (RFC-4180 basics):
+ *  a quoted field may contain the delimiter and newlines-escaped-as-quotes, and
+ *  "" inside a quoted field is a literal quote. Tab-delimited Excel pastes rarely
+ *  quote, but CSV party names ("Rao, Sanjay & Co") and amounts ("1,234") do. */
+export function splitDelimited(line, delim) {
+  if (delim !== ',' || !line.includes('"')) return line.split(delim);
+  const out = []; let cur = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (q) {
+      if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+      else cur += c;
+    } else if (c === '"') { q = true; }
+    else if (c === delim) { out.push(cur); cur = ''; }
+    else cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+
 /** Parse pasted clipboard text (TSV, or CSV) into a grid, then structure it. */
 export function parsePasted(text) {
   const raw = String(text || '').replace(/\r\n?/g, '\n').replace(/\n+$/, '');
   if (!raw.trim()) return { rows: [], cols: {}, headerRow: -1, amountCol: null };
   const delim = raw.includes('\t') ? '\t' : (raw.split('\n')[0].includes(',') ? ',' : '\t');
-  const grid = raw.split('\n').map((line) => line.split(delim));
+  const grid = raw.split('\n').map((line) => splitDelimited(line, delim));
   return parseGrid(grid);
 }
 
@@ -974,7 +994,7 @@ export async function readWorkbookToGrid(file) {
   const name = file.name.toLowerCase();
   if (name.endsWith('.csv')) {
     const text = await file.text();
-    return text.replace(/\r\n?/g, '\n').split('\n').map((l) => l.split(','));
+    return text.replace(/\r\n?/g, '\n').replace(/\n+$/, '').split('\n').map((l) => splitDelimited(l, ','));
   }
   const XLSX = await loadSheetJS();
   const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true, dense: false });
