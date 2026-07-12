@@ -12,7 +12,7 @@ import {
   formatSubNote, canonicalizeSubNotes, applyDeterministicSubNotes,
   applyDeterministicNotes, flagSignAnomalies, flagTallyReview, flagImmaterialSubNotes,
   flagProvisionPlacement, stripRedundantSubNotes, flagYoyReclassification,
-  splitDelimited, parsePasted, reviewFlagsText,
+  splitDelimited, parsePasted, reviewFlagsText, buildIndexMap,
 } from '../src/lib/groupingMap.js';
 import { canonicalFace, canonicalNote, NOTES_BY_FACE } from '../src/data/sch3Vocab.js';
 
@@ -229,6 +229,16 @@ t('flagYoyReclassification: face/note change flagged; same or no-PY clean', () =
   assert.match(rows[1].flags.join(), /reclassified from last year/);
   assert.equal(rows[2].flags.length, 0);
   assert.equal(rows[3].flags.length, 0);
+});
+
+// ---- buildIndexMap (AI-response resilience) -----------------------------
+t('buildIndexMap: coerces string index, matches numeric idx, skips junk', () => {
+  const m = buildIndexMap([{ i: '0', face: 'A' }, { i: 1, face: 'B' }, { i: 'x', face: 'C' }, { face: 'D' }]);
+  assert.equal(m.get(0).face, 'A', 'string "0" matches numeric 0');
+  assert.equal(m.get(1).face, 'B');
+  assert.equal(m.size, 2, 'un-parseable / missing ids skipped');
+  assert.equal(buildIndexMap(null).size, 0);
+  assert.equal(buildIndexMap(undefined).size, 0);
 });
 
 // ---- reviewFlagsText (export filter) ------------------------------------

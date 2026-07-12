@@ -322,6 +322,19 @@ RETURN ONLY THIS JSON (one object per ledger, same i):
 {"mappings":[{"i":0,"face":"","note":"","subNote":"","action":"fill|keep|change","confidence":0.0,"reason":""}]}`;
 }
 
+// Key AI mappings by NUMERIC index. DeepSeek's json_object sometimes emits "i"
+// as a string ("5"), which would silently miss the numeric r.idx lookup and drop
+// the mapping (row falls to current/catch-all values with NO review flag). Coerce
+// to an integer; skip un-parseable ids; on duplicate i the last mapping wins.
+export function buildIndexMap(list) {
+  const map = new Map();
+  for (const m of (Array.isArray(list) ? list : [])) {
+    const i = Number(m?.i);
+    if (Number.isInteger(i)) map.set(i, m);
+  }
+  return map;
+}
+
 // ---- Validation ---------------------------------------------------------
 
 // Faces shown in aggregate + ageing schedule — individual parties are never
@@ -437,7 +450,7 @@ export async function mapGroupings({
       parsed._error = err.message;
     }
     const list = Array.isArray(parsed?.mappings) ? parsed.mappings : [];
-    const map = new Map(list.map((m) => [m.i, m]));
+    const map = buildIndexMap(list);
     chunk.forEach((r) => {
       const v = validateMapping(r, map.get(r.idx) || {});
       if (parsed._error) { v.status = 'review'; v.flags = [...v.flags, 'AI call failed — verify manually']; }
