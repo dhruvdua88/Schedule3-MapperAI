@@ -475,9 +475,11 @@ function RowsTable({ rows, onEdit }) {
   );
 }
 
-// ---- sub-note presentation panel ----------------------------------------
+// ---- sub-note presentation panel (balance-sheet face preview) -----------
+// Mirrors how the note schedule reads on the BS: sub-notes sorted material-first
+// (by |amount| desc), a subtotal per Note, and a Face total in the header. Notes
+// and Faces are ordered by absolute magnitude so the big lines come first.
 function SubNotePanel({ groups }) {
-  // group by face -> note -> [subnote groups]
   const byFace = useMemo(() => {
     const m = new Map();
     groups.forEach((g) => {
@@ -486,25 +488,43 @@ function SubNotePanel({ groups }) {
       if (!notes.has(g.note)) notes.set(g.note, []);
       notes.get(g.note).push(g);
     });
-    return m;
+    // build ordered structure with subtotals
+    const faces = [...m.entries()].map(([face, notes]) => {
+      const noteList = [...notes.entries()].map(([note, subs]) => {
+        const sorted = [...subs].sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+        const total = sorted.reduce((s, x) => s + x.total, 0);
+        return { note, subs: sorted, total };
+      }).sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+      const total = noteList.reduce((s, n) => s + n.total, 0);
+      return { face, notes: noteList, total };
+    }).sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+    return faces;
   }, [groups]);
+
+  const amtStyle = (v) => ({ padding: '6px 8px', fontSize: 12.5, textAlign: 'right', fontFamily: FONTS.MONO, color: v < 0 ? COLORS.CRIT : COLORS.TEXT });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {[...byFace.entries()].map(([face, notes]) => (
+      {byFace.map(({ face, notes, total }) => (
         <Card key={face} accentColor={COLORS.PRIMARY} padding={0}>
-          <div style={{ padding: '12px 18px', borderBottom: `1px solid ${COLORS.BORDER}`, fontFamily: FONTS.SERIF, fontSize: 16, color: COLORS.TEXT, fontWeight: 600 }}>{face || '(unassigned)'}</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '12px 18px', borderBottom: `1px solid ${COLORS.BORDER}` }}>
+            <span style={{ fontFamily: FONTS.SERIF, fontSize: 16, color: COLORS.TEXT, fontWeight: 600 }}>{face || '(unassigned)'}</span>
+            <span style={{ fontFamily: FONTS.MONO, fontSize: 13, fontWeight: 600, color: total < 0 ? COLORS.CRIT : COLORS.TEXT }}>{fmtAmt(total)}</span>
+          </div>
           <div style={{ padding: '6px 18px 16px' }}>
-            {[...notes.entries()].map(([note, subs]) => (
+            {notes.map(({ note, subs, total: noteTotal }) => (
               <div key={note} style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: COLORS.TEXT_MUTED, fontWeight: 600, marginBottom: 6 }}>{note || '(no note)'}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: COLORS.TEXT_MUTED, fontWeight: 600 }}>{note || '(no note)'}</span>
+                  <span style={{ fontSize: 12, fontFamily: FONTS.MONO, color: COLORS.TEXT_MUTED }}>{fmtAmt(noteTotal)}</span>
+                </div>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <tbody>
                     {subs.map((s) => (
                       <tr key={s.subNote} style={{ borderBottom: `1px solid ${COLORS.BORDER}` }}>
                         <td style={{ padding: '6px 8px', fontSize: 13, color: COLORS.TEXT, width: '38%' }}>{s.subNote || <span style={{ color: COLORS.TEXT_FAINT }}>(blank)</span>}</td>
                         <td style={{ padding: '6px 8px', fontSize: 11.5, color: COLORS.TEXT_FAINT }}>{s.ledgers.length} ledger{s.ledgers.length > 1 ? 's' : ''}: {s.ledgers.slice(0, 4).join(', ')}{s.ledgers.length > 4 ? '…' : ''}</td>
-                        <td style={{ padding: '6px 8px', fontSize: 12.5, textAlign: 'right', fontFamily: FONTS.MONO, color: s.total < 0 ? COLORS.CRIT : COLORS.TEXT }}>{fmtAmt(s.total)}</td>
+                        <td style={amtStyle(s.total)}>{fmtAmt(s.total)}</td>
                       </tr>
                     ))}
                   </tbody>
