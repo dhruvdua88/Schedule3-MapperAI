@@ -41,6 +41,10 @@ const HEADER_ALIASES = {
   // Previous-year grouping — used for a year-over-year consistency check.
   'face grouping_previous year': 'pyFace', 'face grouping previous year': 'pyFace',
   'note grouping_previous year': 'pyNote', 'note grouping previous year': 'pyNote',
+  // Explicit amount header (optional — the real T_B uses a date header, so amount
+  // is normally found by numeric probing; these just let a labelled column win).
+  'amount': 'amount', 'amount cy': 'amount', 'amount current year': 'amount',
+  'balance': 'amount', 'closing balance': 'amount', 'net amount': 'amount',
 };
 
 function norm(s) {
@@ -97,17 +101,32 @@ export function parseGrid(grid) {
   }
 
   let cols = best, amountCol = null;
-  if (headerRow === -1) {
-    // No header → assume col0 ledger, first numeric-looking col = amount.
-    headerRow = -1; cols = { ledger: 0 };
-    const probe = grid.find((row) => row && row.some((c) => parseAmt(c) != null));
-    if (probe) amountCol = probe.findIndex((c, i) => i > 0 && parseAmt(c) != null);
+  if (headerRow === -1) { headerRow = -1; cols = { ledger: 0 }; }
+
+  // Amount detection: prefer an explicit "Amount"/"Balance" header if one was
+  // aliased; otherwise pick the FIRST column right of the ledger that is mostly
+  // numeric across the data rows — skipping blank columns and the already-mapped
+  // text columns (face/note/sub/py/sys). Left-to-right so a current-year amount
+  // wins over a previous-year one. Robust to blank gaps and text columns between.
+  if (cols.amount != null) {
+    amountCol = cols.amount;
   } else {
-    // Amount = the first column to the RIGHT of ledger that carries a number.
-    const start = (cols.ledger ?? 0) + 1;
-    const probe = grid.slice(headerRow + 1, headerRow + 40)
-      .find((row) => row && parseAmt(row[start]) != null);
-    amountCol = probe ? start : (cols.face != null ? cols.face - 1 : start);
+    const known = new Set([cols.ledger, cols.face, cols.note, cols.subNote,
+      cols.pyFace, cols.pyNote, cols.sysPrimary, cols.sysParent].filter((v) => v != null));
+    const sample = grid.slice(headerRow + 1, headerRow + 60).filter(Boolean);
+    const width = Math.max(0, ...sample.map((r) => r.length), ...grid.slice(0, 60).map((r) => (r ? r.length : 0)));
+    const startCol = headerRow === -1 ? 1 : (cols.ledger ?? 0) + 1;
+    for (let c = startCol; c < width; c++) {
+      if (known.has(c)) continue;
+      let num = 0, nonEmpty = 0;
+      for (const row of sample) {
+        const cell = row[c];
+        if (cell === '' || cell == null) continue;
+        nonEmpty++;
+        if (parseAmt(cell) != null) num++;
+      }
+      if (num >= 1 && num >= nonEmpty * 0.5) { amountCol = c; break; }
+    }
   }
 
   const rows = [];

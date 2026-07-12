@@ -256,6 +256,23 @@ t('parsePasted: robust amount parsing (sign, currency, Cr/Dr, Indian grouping)',
   assert.equal(amt('Rs. -1000'), -1000);
   assert.equal(amt('₹1,23,456'), 123456, 'Indian digit grouping');
 });
+t('parsePasted: amount detection robust to blank/text columns between', () => {
+  // blank column between ledger and amount
+  let p = parsePasted('Name of Ledger\t\tAmount\nTDS Payable\t\t-1000');
+  assert.equal(p.rows[0].amount, -1000);
+  // a text (Face) column sits between ledger and amount — must NOT grab ledger col
+  p = parsePasted('Name of Ledger\tFace Grouping\tAmount\nTDS\tOther current liabilities\t-1000');
+  assert.equal(p.rows[0].amount, -1000);
+  assert.equal(p.rows[0].curFace, 'Other current liabilities');
+  // ledger not in column 0
+  p = parsePasted('Sr\tName of Ledger\tAmount\n1\tTDS Payable\t-1000');
+  assert.equal(p.rows[0].ledger, 'TDS Payable');
+  assert.equal(p.rows[0].amount, -1000);
+  // no amount column at all
+  p = parsePasted('TDS Payable\nGST Payable');
+  assert.equal(p.rows.length, 2);
+  assert.equal(p.rows[0].amount, null);
+});
 t('parsePasted: detects columns + Tally group', () => {
   const p = parsePasted('System Primary Grouping\tName of Ledger\tAmount\tFace Grouping\nDuties & Taxes\tGST Payable\t-1000\tOther current liabilities');
   assert.equal(p.rows.length, 1);
