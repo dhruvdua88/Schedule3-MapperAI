@@ -20,7 +20,20 @@
 // NOT for: reading the whole .xlsb binary workbook (ExcelJS can't) — the user
 // copies the T_B columns or saves the sheet as .xlsx. Paste is the primary path.
 
-import { callDeepSeek } from './deepseek.js';
+import { callDeepSeek, AuthError, ApiError } from './deepseek.js';
+
+// A chunk error that will recur on every chunk (bad key, no credits, user abort)
+// should ABORT the whole run with a clear message, not silently degrade every
+// row to "review". Transient/per-chunk errors (timeout, one bad response, a 5xx)
+// degrade that chunk only.
+export function isFatalRunError(err) {
+  if (err?.name === 'AbortError') return true;                 // user cancelled
+  if (err instanceof AuthError) return true;                   // bad/expired key
+  if (err?.name === 'AuthError') return true;                  // (cross-realm safety)
+  if (err instanceof ApiError && err.status === 402) return true; // out of credits
+  if (err?.status === 402) return true;
+  return false;
+}
 import {
   FACE_HEADS, NOTES_BY_FACE, canonicalFace, canonicalNote,
 } from '../data/sch3Vocab.js';
@@ -445,7 +458,10 @@ export async function mapGroupings({
         onUsage,
       });
     } catch (err) {
-      // Degrade: this chunk yields validated-from-current-values rows flagged for review.
+      // Fatal (bad key / no credits / cancelled) → abort the whole run so the UI
+      // shows the real reason, instead of silently flagging every row for review.
+      if (isFatalRunError(err)) throw err;
+      // Otherwise degrade: this chunk yields current-value rows flagged for review.
       parsed = { mappings: chunk.map((r) => ({ i: r.idx })) };
       parsed._error = err.message;
     }

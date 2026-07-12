@@ -13,7 +13,9 @@ import {
   applyDeterministicNotes, flagSignAnomalies, flagTallyReview, flagImmaterialSubNotes,
   flagProvisionPlacement, stripRedundantSubNotes, flagYoyReclassification,
   splitDelimited, parsePasted, reviewFlagsText, buildIndexMap, sortSubNotesForFace,
+  isFatalRunError,
 } from '../src/lib/groupingMap.js';
+import { AuthError, ApiError } from '../src/lib/deepseek.js';
 import { canonicalFace, canonicalNote, NOTES_BY_FACE } from '../src/data/sch3Vocab.js';
 
 let passed = 0;
@@ -243,6 +245,16 @@ t('sortSubNotesForFace: material-first, residual Others/Misc last', () => {
   assert.deepEqual(out.slice(0, 2), ['GST Payable', 'TDS Payable'], 'real lines material-first');
   assert.ok(['Others', 'Miscellaneous expenses', ''].includes(out[out.length - 1]), 'a residual is last');
   assert.equal(out.indexOf('Others') > out.indexOf('GST Payable'), true, 'big Others still after real lines');
+});
+
+// ---- isFatalRunError (abort vs degrade) ---------------------------------
+t('isFatalRunError: auth/credits/abort fatal; transient degrades', () => {
+  assert.equal(isFatalRunError(new AuthError('bad key')), true);
+  assert.equal(isFatalRunError(new ApiError('no credits', 402)), true);
+  const abort = new Error('cancelled'); abort.name = 'AbortError';
+  assert.equal(isFatalRunError(abort), true);
+  assert.equal(isFatalRunError(new ApiError('server error', 500)), false);
+  assert.equal(isFatalRunError(new Error('timeout')), false);
 });
 
 // ---- buildIndexMap (AI-response resilience) -----------------------------
