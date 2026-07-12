@@ -200,6 +200,9 @@ RULES
      current assets -> "Short term borrowings" > "Secured Loans repayable on
      demand from banks" (NOT the Unsecured line). Interest on OD -> "Finance
      costs" > "Interest expense".
+   - Imprest / staff advance / salary advance (debit) is an EMPLOYEE advance ->
+     "Short term loans and advances" > "Loans and advances to employees" (not
+     "Others" or "Advances to suppliers").
    - Provisions (credit): "Provision for income tax / taxation" -> "Short term
      provisions" > "Provision for income tax". "Provision for gratuity / leave /
      bonus / employee benefits" -> "Short term provisions" (current) or "Long
@@ -582,6 +585,12 @@ const _NOTE_RULES = [
     re: /\belectricity\b|\bpower\s*(and|&)?\s*fuel\b|\bdiesel\b|\bpetrol\b|generator\s*fuel/i,
     exclude: /parts|equipment|goods|electronics|repair|fitting|installation/i,
     note: 'Power and fuel',
+  },
+  {
+    // Imprest / staff advance is an EMPLOYEE advance, not "Others"/"suppliers".
+    face: 'Short term loans and advances',
+    re: /\bimprest\b|staff\s*advance|salary\s*advance|advance\s*to\s*staff/i,
+    note: 'Loans and advances to employees',
   },
 ];
 export function applyDeterministicNotes(results) {

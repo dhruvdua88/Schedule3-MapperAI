@@ -94,6 +94,17 @@ t('applyDeterministicNotes: bank OD/CC -> secured, credit card untouched', () =>
   assert.equal(rows[1].note, 'Secured Loans repayable on demand from banks');
   assert.equal(rows[2].note, 'Other payables', 'credit card (wrong face) untouched');
 });
+t('applyDeterministicNotes: imprest -> Loans and advances to employees', () => {
+  const rows = [
+    row({ ledger: 'Imprest Sachin Jaiswal', face: 'Short term loans and advances', note: 'Others' }),
+    row({ ledger: 'VINOD NEGI (IMPREST)', face: 'Short term loans and advances', note: 'Loans and advances to employees' }),
+    row({ ledger: 'Advance-United India Insurance Co.', face: 'Short term loans and advances', note: 'Advances to suppliers' }),
+  ];
+  applyDeterministicNotes(rows);
+  assert.equal(rows[0].note, 'Loans and advances to employees', 'imprest reclassified from Others');
+  assert.equal(rows[1].note, 'Loans and advances to employees', 'already correct');
+  assert.equal(rows[2].note, 'Advances to suppliers', 'vendor advance untouched');
+});
 t('applyDeterministicNotes: electricity -> Power and fuel, electrical parts untouched', () => {
   const rows = [
     row({ ledger: 'Electricity & water Expenses', face: 'Other expenses', note: 'Indirect expenses' }),
