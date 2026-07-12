@@ -200,6 +200,12 @@ RULES
      current assets -> "Short term borrowings" > "Secured Loans repayable on
      demand from banks" (NOT the Unsecured line). Interest on OD -> "Finance
      costs" > "Interest expense".
+   - Under "Other expenses" pick the SPECIFIC note, consistently: electricity /
+     power / fuel / diesel -> "Power and fuel" (never "Indirect expenses");
+     travel / conveyance / reimbursement of travel -> "Travelling Expenses";
+     insurance -> "Insurance"; telephone / internet / mobile -> "Telephone
+     expenses"; rent -> "Rent"; audit fee -> "Auditors' Remuneration". Only use
+     "Miscellaneous expenses" / "Other Expenses" when no specific note fits.
 3b. The Tally "sysGroup" (primary > parent group) is STRONG evidence for the
    FACE — trust it unless the ledger name clearly contradicts:
      Sundry Creditors -> "Trade payables due to others" (or MSME if micro/small)
@@ -537,12 +543,21 @@ const _NOTE_RULES = [
     re: /overdraft|\bo\/?d\b|cash\s*credit|\bcc\s*(a\/?c|limit|account)|bank.*\bod\b/i,
     note: 'Secured Loans repayable on demand from banks',
   },
+  {
+    // Electricity / power / fuel expense -> "Power and fuel" (Sch III standard),
+    // never the generic "Indirect expenses". Excludes "electrical parts/goods/
+    // equipment/repairs" which are repairs, not utilities.
+    face: 'Other expenses',
+    re: /\belectricity\b|\bpower\s*(and|&)?\s*fuel\b|\bdiesel\b|\bpetrol\b|generator\s*fuel/i,
+    exclude: /parts|equipment|goods|electronics|repair|fitting|installation/i,
+    note: 'Power and fuel',
+  },
 ];
 export function applyDeterministicNotes(results) {
   let n = 0;
   for (const r of results) {
     if (!r.face) continue;
-    const hit = _NOTE_RULES.find((x) => x.face === r.face && x.re.test(r.ledger));
+    const hit = _NOTE_RULES.find((x) => x.face === r.face && x.re.test(r.ledger) && !(x.exclude && x.exclude.test(r.ledger)));
     if (hit && (NOTES_BY_FACE[r.face] || []).includes(hit.note) && r.note !== hit.note) {
       r.note = hit.note;
       if (!r.flags.includes('deterministic note')) r.flags.push('deterministic note');

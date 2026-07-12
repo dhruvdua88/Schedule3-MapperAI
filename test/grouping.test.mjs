@@ -88,6 +88,17 @@ t('applyDeterministicNotes: bank OD/CC -> secured, credit card untouched', () =>
   assert.equal(rows[1].note, 'Secured Loans repayable on demand from banks');
   assert.equal(rows[2].note, 'Other payables', 'credit card (wrong face) untouched');
 });
+t('applyDeterministicNotes: electricity -> Power and fuel, electrical parts untouched', () => {
+  const rows = [
+    row({ ledger: 'Electricity & water Expenses', face: 'Other expenses', note: 'Indirect expenses' }),
+    row({ ledger: 'Delhi Electricity', face: 'Other expenses', note: 'Power and fuel' }),
+    row({ ledger: 'Electrical Parts & Electronics', face: 'Other expenses', note: 'Repairs to machinery' }),
+  ];
+  applyDeterministicNotes(rows);
+  assert.equal(rows[0].note, 'Power and fuel', 'electricity reclassified');
+  assert.equal(rows[1].note, 'Power and fuel', 'already correct, unchanged');
+  assert.equal(rows[2].note, 'Repairs to machinery', 'electrical PARTS excluded');
+});
 
 // ---- flagSignAnomalies --------------------------------------------------
 t('flagSignAnomalies: asset+credit flagged, liability+credit clean, contra skipped', () => {
