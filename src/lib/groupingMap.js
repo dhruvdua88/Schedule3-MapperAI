@@ -745,6 +745,21 @@ export function applyDeterministicSubNotes(results) {
   return n;
 }
 
+// ---- Sub-note ordering for the face (presentation) ----------------------
+// Standard Schedule III presentation lists the residual "Others" / "Miscellaneous"
+// line LAST in a note regardless of its size; every other sub-note is ordered
+// material-first (|amount| desc). `items` are objects with { subNote, total }.
+// Returns a NEW sorted array; does not mutate.
+const _RESIDUAL_SUBNOTE_RE = /^(others?|miscellaneous.*|other expenses|specify at level 3)$/i;
+export function sortSubNotesForFace(items) {
+  const isResidual = (s) => !s || _RESIDUAL_SUBNOTE_RE.test(String(s).trim());
+  return [...items].sort((a, b) => {
+    const ra = isResidual(a.subNote), rb = isResidual(b.subNote);
+    if (ra !== rb) return ra ? 1 : -1;                 // residuals sink to the bottom
+    return Math.abs(b.total || 0) - Math.abs(a.total || 0); // else material-first
+  });
+}
+
 // ---- Redundant sub-note removal (presentation) --------------------------
 // A sub-note that merely repeats its Note (or Face) name adds nothing on the
 // face — "Professional Fees" under the note "Professional fees" is tautological.

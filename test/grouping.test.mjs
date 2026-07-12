@@ -12,7 +12,7 @@ import {
   formatSubNote, canonicalizeSubNotes, applyDeterministicSubNotes,
   applyDeterministicNotes, flagSignAnomalies, flagTallyReview, flagImmaterialSubNotes,
   flagProvisionPlacement, stripRedundantSubNotes, flagYoyReclassification,
-  splitDelimited, parsePasted, reviewFlagsText, buildIndexMap,
+  splitDelimited, parsePasted, reviewFlagsText, buildIndexMap, sortSubNotesForFace,
 } from '../src/lib/groupingMap.js';
 import { canonicalFace, canonicalNote, NOTES_BY_FACE } from '../src/data/sch3Vocab.js';
 
@@ -229,6 +229,20 @@ t('flagYoyReclassification: face/note change flagged; same or no-PY clean', () =
   assert.match(rows[1].flags.join(), /reclassified from last year/);
   assert.equal(rows[2].flags.length, 0);
   assert.equal(rows[3].flags.length, 0);
+});
+
+// ---- sortSubNotesForFace ------------------------------------------------
+t('sortSubNotesForFace: material-first, residual Others/Misc last', () => {
+  const out = sortSubNotesForFace([
+    { subNote: 'Others', total: -9000000 },       // huge, but residual -> last
+    { subNote: 'TDS Payable', total: -100000 },
+    { subNote: 'GST Payable', total: -500000 },
+    { subNote: 'Miscellaneous expenses', total: -50000 }, // residual -> last
+    { subNote: '', total: -700000 },              // blank residual -> last
+  ]).map((x) => x.subNote);
+  assert.deepEqual(out.slice(0, 2), ['GST Payable', 'TDS Payable'], 'real lines material-first');
+  assert.ok(['Others', 'Miscellaneous expenses', ''].includes(out[out.length - 1]), 'a residual is last');
+  assert.equal(out.indexOf('Others') > out.indexOf('GST Payable'), true, 'big Others still after real lines');
 });
 
 // ---- buildIndexMap (AI-response resilience) -----------------------------

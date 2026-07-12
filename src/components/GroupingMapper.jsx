@@ -21,7 +21,7 @@ import { getApiKey, setApiKey as persistApiKey, getSettings, saveSettings } from
 import { FACE_HEADS, NOTES_BY_FACE } from '../data/sch3Vocab.js';
 import {
   parsePasted, readWorkbookToGrid, parseGrid, mapGroupings,
-  toGroupingTSV, toFullTSV, downloadMappingExcel,
+  toGroupingTSV, toFullTSV, downloadMappingExcel, sortSubNotesForFace,
 } from '../lib/groupingMap.js';
 
 const SAMPLE = `System Primary Grouping\tName of Ledger\tAmount\tFace Grouping\tNote Grouping\tSub-Note Grouping
@@ -518,7 +518,7 @@ function SubNotePanel({ groups }) {
     // build ordered structure with subtotals
     const faces = [...m.entries()].map(([face, notes]) => {
       const noteList = [...notes.entries()].map(([note, subs]) => {
-        const sorted = [...subs].sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+        const sorted = sortSubNotesForFace(subs);          // material-first, "Others" last
         const total = sorted.reduce((s, x) => s + x.total, 0);
         return { note, subs: sorted, total };
       }).sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
