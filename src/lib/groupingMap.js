@@ -200,6 +200,12 @@ RULES
      current assets -> "Short term borrowings" > "Secured Loans repayable on
      demand from banks" (NOT the Unsecured line). Interest on OD -> "Finance
      costs" > "Interest expense".
+   - Provisions (credit): "Provision for income tax / taxation" -> "Short term
+     provisions" > "Provision for income tax". "Provision for gratuity / leave /
+     bonus / employee benefits" -> "Short term provisions" (current) or "Long
+     term provisions" > "Provision for employee benefits". Do NOT park provisions
+     under "Other current liabilities" > "Other payables". ("Provision for
+     doubtful debts" is the exception — it stays a contra under receivables/loans.)
    - Under "Other expenses" pick the SPECIFIC note, consistently: electricity /
      power / fuel / diesel -> "Power and fuel" (never "Indirect expenses");
      travel / conveyance / reimbursement of travel -> "Travelling Expenses";
@@ -392,6 +398,7 @@ export async function mapGroupings({
   const deterministicNotes = applyDeterministicNotes(results);
   const tallyReviewFlags = flagTallyReview(results);
   const signReviewFlags = flagSignAnomalies(results);
+  const provisionFlags = flagProvisionPlacement(results);
   const deterministicSubNotes = applyDeterministicSubNotes(results);
   for (const r of results) if (r.subNote) r.subNote = formatSubNote(r.subNote);
   const subNoteMerges = canonicalizeSubNotes(results);
@@ -410,10 +417,34 @@ export async function mapGroupings({
     deterministicNotes,
     tallyReviewFlags,
     signReviewFlags,
+    provisionFlags,
     immaterialSubNotes,
   };
 
   return { results, stats };
+}
+
+// ---- Provision-placement review flag (quality control, non-mutating) ----
+// A "Provision for income tax / gratuity / leave / employee benefits" belongs on
+// the dedicated Short/Long term provisions face, not "Other current liabilities
+// > Other payables" where preparers often park it. Flag the mismatch for the
+// reviewer (non-mutating). Excludes "provision for doubtful debts", which is a
+// legitimate contra under Trade receivables / loans & advances.
+const _PROVISION_RE = /provision(s)?\s+(for|of)\s+(income\s*tax|taxation|\btax\b|gratuity|leave|bonus|employee|superannuation|pension)/i;
+// Only liability faces where a provision is commonly MIS-parked. A provision on a
+// P&L face (Tax Expenses) is a charge/write-back, not a BS provision — skip it.
+const _PROVISION_MISPLACED_FACES = new Set(['Other current liabilities', 'Other Long term liabilities']);
+export function flagProvisionPlacement(results) {
+  let n = 0;
+  for (const r of results) {
+    if (!r.face || !_PROVISION_RE.test(r.ledger)) continue;
+    if (/doubtful|excess|short|written\s*(back|off)|reversal|reverse/i.test(r.ledger)) continue; // contra / P&L movement
+    if (_PROVISION_MISPLACED_FACES.has(r.face)) {
+      const msg = 'verify: provision — consider Short/Long term provisions';
+      if (!r.flags.includes(msg)) { r.flags.push(msg); n++; }
+    }
+  }
+  return n;
 }
 
 // ---- Sign / polarity review flags (quality control, non-mutating) -------

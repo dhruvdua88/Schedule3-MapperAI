@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import {
   formatSubNote, canonicalizeSubNotes, applyDeterministicSubNotes,
   applyDeterministicNotes, flagSignAnomalies, flagTallyReview, flagImmaterialSubNotes,
-  parsePasted, reviewFlagsText,
+  flagProvisionPlacement, parsePasted, reviewFlagsText,
 } from '../src/lib/groupingMap.js';
 import { canonicalFace, canonicalNote, NOTES_BY_FACE } from '../src/data/sch3Vocab.js';
 
@@ -156,6 +156,22 @@ t('flagImmaterialSubNotes: tiny singleton in busy note flagged; big/multi/small-
   assert.ok(!rows[0].flags.includes('immaterial'), 'big item clean');
   assert.ok(!rows[5].flags.includes('immaterial') && !rows[6].flags.includes('immaterial'), 'multi-ledger sub-note clean');
   assert.ok(!rows[7].flags.includes('immaterial'), 'small note (< MIN_LINES) never flagged');
+});
+
+// ---- flagProvisionPlacement ---------------------------------------------
+t('flagProvisionPlacement: provision off Provisions face flagged; on-face + doubtful clean', () => {
+  const rows = [
+    row({ ledger: 'Provision for Income Tax', face: 'Other current liabilities', note: 'Other payables' }), // flag
+    row({ ledger: 'Provision of Income Tax', face: 'Short term provisions', note: 'Provision for income tax' }), // on-face clean
+    row({ ledger: 'Provision for doubtful debts', face: 'Trade receivables', note: 'Provision for doubtful debts' }), // contra clean
+    row({ ledger: 'Salary Payable', face: 'Other current liabilities', note: 'Other payables' }), // not a provision
+  ];
+  const n = flagProvisionPlacement(rows);
+  assert.equal(n, 1);
+  assert.match(rows[0].flags.join(), /Short\/Long term provisions/);
+  assert.equal(rows[1].flags.length, 0);
+  assert.equal(rows[2].flags.length, 0);
+  assert.equal(rows[3].flags.length, 0);
 });
 
 // ---- reviewFlagsText (export filter) ------------------------------------
