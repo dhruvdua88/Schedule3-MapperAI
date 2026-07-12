@@ -692,8 +692,10 @@ export function formatSubNote(raw) {
   let s = String(raw).replace(/\s+/g, ' ').trim();
   s = s.replace(_SUBNOTE_TAIL, '').trim();      // strip "A/c"/"Account"/"Ledger" tail FIRST
   // Space out initials glued by a dot ("S.santha" -> "S. santha") so the name
-  // part gets cased; digits (2.5) are untouched (both sides must be letters).
-  s = s.replace(/([A-Za-z])\.([A-Za-z])/g, '$1. $2');
+  // part gets cased. Lookahead (not a capture) on the trailing letter so
+  // CONSECUTIVE initials all split in ONE pass ("S.K.Verma" -> "S. K. Verma"),
+  // which also makes formatSubNote idempotent. Digits (2.5) are untouched.
+  s = s.replace(/([A-Za-z])\.(?=[A-Za-z])/g, '$1. ');
   // Space "&" and "/" only when they join full words (≥2 chars each) — keeps
   // "L&T" and "A/c" tight while fixing "Repairs&Maintenance", "TDS/TCS".
   s = s.replace(/(\w{2,})\s*&\s*(\w{2,})/g, '$1 & $2');

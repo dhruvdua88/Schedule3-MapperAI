@@ -42,6 +42,14 @@ t('formatSubNote: cases across punctuation (initials, parens, hyphens)', () => {
   assert.equal(formatSubNote('Consumables (gst)'), 'Consumables (GST)');
   assert.equal(formatSubNote('Adopt Net Tech Pvt Ltd(advance)'), 'Adopt Net Tech Pvt Ltd(Advance)');
 });
+t('formatSubNote: idempotent + consecutive initials in one pass', () => {
+  assert.equal(formatSubNote('S.K.Verma & Co'), 'S. K. Verma & Co');
+  assert.equal(formatSubNote('A.B.C.Traders'), 'A. B. C. Traders');
+  for (const c of ['tds payable', 'S.K.Verma', '- Delhi Electricity', 'L&T Finance Limited',
+    'Bajaj Finance Limited A/c', 'Consumables (gst)', 'Foo -- Bar', 'Input CGST 2.5%']) {
+    assert.equal(formatSubNote(formatSubNote(c)), formatSubNote(c), `idempotent: ${c}`);
+  }
+});
 t('formatSubNote: strips leading/trailing separators, collapses doubled', () => {
   assert.equal(formatSubNote('- Delhi Electricity'), 'Delhi Electricity');
   assert.equal(formatSubNote('Rent Noida -'), 'Rent Noida');
