@@ -385,6 +385,7 @@ export async function mapGroupings({
   //  (c) token-set canonicalise within each bucket (word-order/plural/status).
   const deterministicNotes = applyDeterministicNotes(results);
   const tallyReviewFlags = flagTallyReview(results);
+  const signReviewFlags = flagSignAnomalies(results);
   const deterministicSubNotes = applyDeterministicSubNotes(results);
   for (const r of results) if (r.subNote) r.subNote = formatSubNote(r.subNote);
   const subNoteMerges = canonicalizeSubNotes(results);
@@ -400,9 +401,48 @@ export async function mapGroupings({
     deterministicSubNotes,
     deterministicNotes,
     tallyReviewFlags,
+    signReviewFlags,
   };
 
   return { results, stats };
+}
+
+// ---- Sign / polarity review flags (quality control, non-mutating) -------
+// TB convention: DEBIT balance is positive, CREDIT balance is negative. An
+// asset or expense face normally carries a DEBIT balance; a liability, equity or
+// income face carries a CREDIT balance. A MATERIAL balance with the opposite
+// sign usually means a misclassification (e.g. a "receivable" that is really an
+// advance received) or a contra. Flag it for the reviewer — never change it.
+// Legitimate contras (provisions, accumulated depreciation, "less:" lines) are
+// skipped so the signal stays high-precision.
+const _CREDIT_SIDE_FACES = new Set([
+  'Share capital', 'Reserves and surplus', 'Money received against share warrants',
+  'Share application money pending allotment', 'Long term borrowings',
+  'Deferred tax liabilities Net', 'Other Long term liabilities', 'Long term provisions',
+  'Short term borrowings', 'Trade payables due to MSME', 'Trade payables due to others',
+  'Other current liabilities', 'Short term provisions', 'Revenue from operations', 'Other Income',
+]);
+const _SIGN_CONTRA_RE = /provision|doubtful|\bless\b|reclassified|accumulated|redeem|written off|written back|impairment|depreciation|round\s*off|closing stock|opening stock|suspense/i;
+// Faces whose balance is legitimately either sign — never sign-flag them.
+const _SIGN_SKIP_FACES = new Set([
+  'Change in Inventories of work in progress and finished goods',
+  'Exceptional item', 'Extraordinary Item', 'Prior Period Item',
+]);
+const _SIGN_MATERIAL = 1000;   // ignore trivial / opening-only balances
+export function flagSignAnomalies(results) {
+  let n = 0;
+  for (const r of results) {
+    if (!r.face || _SIGN_SKIP_FACES.has(r.face)) continue;
+    if (typeof r.amount !== 'number' || Math.abs(r.amount) < _SIGN_MATERIAL) continue;
+    if (_SIGN_CONTRA_RE.test(`${r.note} ${r.subNote} ${r.ledger}`)) continue; // legit contra
+    const expectCredit = _CREDIT_SIDE_FACES.has(r.face);
+    const isCredit = r.amount < 0;                 // negative = credit balance
+    if (expectCredit !== isCredit) {
+      const msg = `verify: ${isCredit ? 'credit' : 'debit'} balance unusual for ${r.face}`;
+      if (!r.flags.includes(msg)) { r.flags.push(msg); n++; }
+    }
+  }
+  return n;
 }
 
 // ---- Tally-group review flags (quality control, non-mutating) -----------
