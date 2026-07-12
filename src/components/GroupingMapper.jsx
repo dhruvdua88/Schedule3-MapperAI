@@ -176,6 +176,7 @@ export function GroupingMapper() {
       if (filter === 'review' && r.status !== 'review') return false;
       if (filter === 'fill' && r.action !== 'fill') return false;
       if (filter === 'change' && r.action !== 'change') return false;
+      if (filter === 'verify' && !(r.flags || []).some((f) => f.startsWith('verify:'))) return false;
       if (q && !(`${r.ledger} ${r.face} ${r.note} ${r.subNote}`.toLowerCase().includes(q))) return false;
       return true;
     });
@@ -381,7 +382,7 @@ export function GroupingMapper() {
             {view === 'rows' && (
               <>
                 <div style={{ display: 'inline-flex', gap: 4 }}>
-                  {[['all', 'All'], ['fill', 'Filled'], ['change', 'Changed'], ['review', 'Review']].map(([k, lbl]) => (
+                  {[['all', 'All'], ['fill', 'Filled'], ['change', 'Changed'], ['verify', 'Verify'], ['review', 'Review']].map(([k, lbl]) => (
                     <button key={k} type="button" onClick={() => setFilter(k)}
                       style={{ padding: '6px 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontFamily: FONTS.BODY,
                         border: `1px solid ${filter === k ? COLORS.PRIMARY : COLORS.BORDER_STRONG}`,
@@ -438,6 +439,9 @@ function RowsTable({ rows, onEdit }) {
                 <td style={{ padding: '7px 10px', fontSize: 12.5, color: COLORS.TEXT, maxWidth: 240 }}>
                   {r.ledger}
                   {r.reason && <div style={{ fontSize: 10.5, color: COLORS.TEXT_FAINT, marginTop: 1 }}>{r.reason}</div>}
+                  {(r.flags || []).filter((f) => f.startsWith('verify:')).map((f) => (
+                    <div key={f} style={{ fontSize: 10.5, color: COLORS.HIGH, marginTop: 1 }}>⚑ {f.replace('verify: ', '')}</div>
+                  ))}
                 </td>
                 <td style={{ padding: '7px 10px', fontSize: 12, textAlign: 'right', fontFamily: FONTS.MONO, color: r.amount < 0 ? COLORS.CRIT : COLORS.TEXT }}>{fmtAmt(r.amount)}</td>
                 <td style={{ padding: '6px 8px', minWidth: 170 }}>

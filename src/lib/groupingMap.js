@@ -384,6 +384,7 @@ export async function mapGroupings({
   //  (b) surface-form normalise (casing/spacing/noise);
   //  (c) token-set canonicalise within each bucket (word-order/plural/status).
   const deterministicNotes = applyDeterministicNotes(results);
+  const tallyReviewFlags = flagTallyReview(results);
   const deterministicSubNotes = applyDeterministicSubNotes(results);
   for (const r of results) if (r.subNote) r.subNote = formatSubNote(r.subNote);
   const subNoteMerges = canonicalizeSubNotes(results);
@@ -398,9 +399,45 @@ export async function mapGroupings({
     subNoteMerges,
     deterministicSubNotes,
     deterministicNotes,
+    tallyReviewFlags,
   };
 
   return { results, stats };
+}
+
+// ---- Tally-group review flags (quality control, non-mutating) -----------
+// The Tally System Primary Group is strong evidence for the face. When the
+// assigned face contradicts a HIGH-CONFIDENCE group, flag the row for the
+// reviewer's attention — WITHOUT changing the value (the contradiction is often
+// a legitimate name-based override, e.g. auditor under Sundry Creditors, so the
+// human decides). Only groups whose deviation is usually worth a second look are
+// listed; noisy ones (Sundry Creditors, Duties & Taxes) are deliberately omitted.
+const _TALLY_EXPECT = {
+  'Sundry Debtors': ['Trade receivables'],
+  'Fixed Assets': ['Property Plant and Equipment', 'Intangible assets', 'Capital work in progress', 'Intangible assets under development'],
+  'Bank Accounts': ['Cash and Cash Equivalents'],
+  'Cash-in-hand': ['Cash and Cash Equivalents'],
+  'Deposits (Asset)': ['Other non current assets', 'Short term loans and advances', 'Long term loans and advances'],
+  'Unsecured Loans': ['Long term borrowings', 'Short term borrowings'],
+  'Secured Loans': ['Long term borrowings', 'Short term borrowings'],
+  'Bank OD A/c': ['Short term borrowings'],
+  'Capital Account': ['Share capital', 'Reserves and surplus'],
+  'Provisions': ['Short term provisions', 'Long term provisions', 'Other current liabilities'],
+  'Sales Accounts': ['Revenue from operations'],
+};
+export function flagTallyReview(results) {
+  let n = 0;
+  for (const r of results) {
+    const grp = (r.sysPrimary || '').trim();
+    const expect = _TALLY_EXPECT[grp];
+    if (!expect || !r.face) continue;
+    if (!expect.includes(r.face)) {
+      const msg = `verify: Tally group "${grp}" suggests ${expect[0]}`;
+      if (!r.flags.includes(msg)) r.flags.push(msg);
+      n++;
+    }
+  }
+  return n;
 }
 
 // ---- Deterministic MAIN-NOTE corrections (unmistakable, in-vocab) --------
