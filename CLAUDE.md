@@ -17,6 +17,22 @@ Two review paths exist:
 
 The user is **Dhruv Dua** of Dhruv Dua & Co. Chartered Accountants (FRN 028145N). Default firm settings reflect this.
 
+Published as **Schedule3-MapperAI** (public repo `dhruvdua88/Schedule3-MapperAI`, live at `https://dhruvdua88.github.io/Schedule3-MapperAI/`). `App.jsx` is a two-mode switch: the **Schedule III Reviewer** above, and the **Grouping Mapper** below.
+
+---
+
+## Grouping Mapper (the second mode — `src/components/GroupingMapper.jsx`, `src/lib/groupingMap.js`, `src/data/sch3Vocab.js`)
+
+Standalone tool: paste or upload a Schedule III Automation Tool trial balance (T_B), and DeepSeek assigns a validated **Face → Note → Sub-Note** grouping to every ledger, pasteable straight back into the tool's data-validated G:I cells.
+
+**Validation vocabulary (`sch3Vocab.js`) is AUTHORITATIVE — do not "fix" it by hand.** It was extracted from the workbook's OWN data validations: Face list = `T_B!$EF$4:$EF$57` (42 faces); Note = `INDIRECT(SUBSTITUTE(Face," ","_"))` → a per-face named range holding that face's exact allowed notes (so "Statutory dues", "Others", "Unsecured considered good" ARE valid); Sub-Note (col I) = free text, no validation. Regenerate only from a converted `.xlsx` via `openpyxl` (`wb.defined_names` + `T_B` `data_validations`), never from the `Drop_List` sheet (that was an incomplete guess). Face/Note MUST be copied verbatim from these lists or the paste breaks the tool's validation.
+
+**Pipeline in `mapGroupings()` (order matters):** chunked DeepSeek calls (temp 0, ~55 ledgers/chunk, prompt embeds the per-face note lists verbatim) → `validateMapping` (canonicalise Face/Note to vocab; single-note & catch-all fallbacks so a valid face never has a blank note; trade-payables/receivables faces forced blank sub-note) → deterministic passes: `applyDeterministicNotes` (bank OD→secured, electricity→Power and fuel, imprest→employees; each in-vocab, face-guarded, per-rule `exclude`) → review flags `flagTallyReview` / `flagSignAnomalies` / `flagProvisionPlacement` (NON-mutating, `verify:` prefix) → `applyDeterministicSubNotes` (GST-input/TDS/PF/ESI/prof-tax → one canonical line) → `formatSubNote` (acronym-aware Title Case, L&T/A/c tight, entity suffixes → Pvt Ltd/Ltd, separator-strip; **idempotent**) → `canonicalizeSubNotes` (token-set merge of word-order/plural/status variants; keeps CGST≠IGST) → `stripRedundantSubNotes` (sub-note == note/face → blank) → `flagImmaterialSubNotes` (singleton < 1% of note total in a busy note; non-mutating). All deterministic passes are idempotent.
+
+**Flag taxonomy:** hard `status:'review'` = blank/invalid, blocks the G:I paste. Soft `verify:` flags (sign / Tally / provision) = valid but worth a second look, surfaced via the "To verify" stat + Verify filter + amber row hint, and exported in the "Review Flags" column. Informational flags (deterministic/immaterial/redundant/sub-note blank) are dropped from the export via `reviewFlagsText`.
+
+**Tests:** `npm test` → `test/grouping.test.mjs` (offline, no DeepSeek) locks every deterministic function. The live 523-ledger validation runs from a scratchpad `runtest.mjs` against `fortius bs.xlsb` (needs `DEEPSEEK_API_KEY`); the invariant is **0 off-vocab faces/notes, review 0**. When you touch `groupingMap.js`/`sch3Vocab.js`, run `npm test` AND re-run the harness.
+
 ---
 
 ## Tech stack (don't change without good reason)
