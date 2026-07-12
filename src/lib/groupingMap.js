@@ -405,6 +405,7 @@ export async function mapGroupings({
   const deterministicSubNotes = applyDeterministicSubNotes(results);
   for (const r of results) if (r.subNote) r.subNote = formatSubNote(r.subNote);
   const subNoteMerges = canonicalizeSubNotes(results);
+  const redundantSubNotes = stripRedundantSubNotes(results);
   // Materiality runs LAST — on the final, canonicalised sub-notes.
   const immaterialSubNotes = flagImmaterialSubNotes(results);
 
@@ -416,6 +417,7 @@ export async function mapGroupings({
     review: results.filter((r) => r.status === 'review').length,
     subNoteGroups: new Set(results.map((r) => r.subNote).filter(Boolean)).size,
     subNoteMerges,
+    redundantSubNotes,
     deterministicSubNotes,
     deterministicNotes,
     tallyReviewFlags,
@@ -650,6 +652,26 @@ export function applyDeterministicSubNotes(results) {
   return n;
 }
 
+// ---- Redundant sub-note removal (presentation) --------------------------
+// A sub-note that merely repeats its Note (or Face) name adds nothing on the
+// face — "Professional Fees" under the note "Professional fees" is tautological.
+// Blank it so those ledgers roll straight up to the note line, decluttering the
+// schedule. Never touches aggregate faces (already blank).
+function _normLoose(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+export function stripRedundantSubNotes(results) {
+  let n = 0;
+  for (const r of results) {
+    if (!r.subNote) continue;
+    const sn = _normLoose(r.subNote);
+    if (sn && (sn === _normLoose(r.note) || sn === _normLoose(r.face))) {
+      r.subNote = '';
+      if (!r.flags.includes('redundant sub-note removed')) r.flags.push('redundant sub-note removed');
+      n++;
+    }
+  }
+  return n;
+}
+
 // ---- Deterministic sub-note presentation formatting ---------------------
 // Uniform surface form so lines read consistently on the face of the BS.
 // Fixes: whitespace, "&" spacing, trailing bookkeeping noise, and casing —
@@ -767,7 +789,7 @@ export function toGroupingTSV(results) {
  *  travel into the exported working paper. Internal/informational flags
  *  ("sub-note blank", "deterministic ...") are omitted. "; "-joined; empty when
  *  clean. */
-const _EXPORT_FLAG_DROP = /^(sub-note blank|deterministic sub-note|deterministic note|immaterial)$/;
+const _EXPORT_FLAG_DROP = /^(sub-note blank|deterministic sub-note|deterministic note|immaterial|redundant sub-note removed)$/;
 export function reviewFlagsText(r) {
   return (r.flags || [])
     .filter((f) => !_EXPORT_FLAG_DROP.test(f))

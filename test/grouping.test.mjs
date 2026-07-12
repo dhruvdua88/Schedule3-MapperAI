@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import {
   formatSubNote, canonicalizeSubNotes, applyDeterministicSubNotes,
   applyDeterministicNotes, flagSignAnomalies, flagTallyReview, flagImmaterialSubNotes,
-  flagProvisionPlacement, parsePasted, reviewFlagsText,
+  flagProvisionPlacement, stripRedundantSubNotes, parsePasted, reviewFlagsText,
 } from '../src/lib/groupingMap.js';
 import { canonicalFace, canonicalNote, NOTES_BY_FACE } from '../src/data/sch3Vocab.js';
 
@@ -145,6 +145,20 @@ t('flagTallyReview: contradiction flagged, agreement clean', () => {
   assert.match(rows[0].flags.join(), /Fixed Assets/);
   assert.equal(rows[1].flags.length, 0);
   assert.equal(rows[2].flags.length, 0);
+});
+
+// ---- stripRedundantSubNotes ---------------------------------------------
+t('stripRedundantSubNotes: sub-note == note/face blanked; distinct kept', () => {
+  const rows = [
+    row({ face: 'Other expenses', note: 'Professional fees', subNote: 'Professional Fees' }), // == note -> blank
+    row({ face: 'Other current liabilities', note: 'Other payables', subNote: 'Other Current Liabilities' }), // == face -> blank
+    row({ face: 'Other current liabilities', note: 'Statutory dues', subNote: 'TDS Payable' }), // distinct -> keep
+  ];
+  const n = stripRedundantSubNotes(rows);
+  assert.equal(n, 2);
+  assert.equal(rows[0].subNote, '');
+  assert.equal(rows[1].subNote, '');
+  assert.equal(rows[2].subNote, 'TDS Payable');
 });
 
 // ---- flagImmaterialSubNotes ---------------------------------------------
