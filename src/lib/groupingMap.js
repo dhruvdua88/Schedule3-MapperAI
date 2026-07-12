@@ -648,6 +648,14 @@ export function formatSubNote(raw) {
     if (offset > 0 && atWordStart && _SUBNOTE_SMALL.has(lw)) return lw; // small joining word
     return lw.charAt(0).toUpperCase() + lw.slice(1);          // Title Case
   });
+  // Normalise company suffixes so party lines read consistently on the face:
+  // "Private Limited"/"Pvt. Ltd." -> "Pvt Ltd", standalone "Limited" -> "Ltd".
+  // Order matters (Private Limited before bare Limited). Only touches suffix words.
+  s = s.replace(/\bPrivate\s+Limited\b\.?/g, 'Pvt Ltd')
+       .replace(/\bPvt\.?\s*Ltd\.?\b/g, 'Pvt Ltd')
+       .replace(/\bLimited\b\.?/g, 'Ltd')
+       .replace(/\bLtd\.\B/g, 'Ltd')
+       .replace(/\bL\.?L\.?P\.?\b/gi, 'LLP');
   return s.replace(/\s{2,}/g, ' ').trim();
 }
 

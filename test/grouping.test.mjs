@@ -28,12 +28,12 @@ t('formatSubNote: acronyms upper, small words lower', () => {
   assert.equal(formatSubNote('pf & esi payable'), 'PF & ESI Payable');
 });
 t('formatSubNote: keeps L&T / A/c tight, spaces real & and /', () => {
-  assert.equal(formatSubNote('L&T Finance Limited'), 'L&T Finance Limited');
+  assert.equal(formatSubNote('L&T Finance Limited'), 'L&T Finance Ltd');
   assert.equal(formatSubNote('Repairs&Maintenance'), 'Repairs & Maintenance');
   assert.equal(formatSubNote('TDS/TCS Payable'), 'TDS / TCS Payable');
 });
 t('formatSubNote: strips A/c tail, keeps digits', () => {
-  assert.equal(formatSubNote('Bajaj Finance Limited A/c'), 'Bajaj Finance Limited');
+  assert.equal(formatSubNote('Bajaj Finance Limited A/c'), 'Bajaj Finance Ltd');
   assert.equal(formatSubNote('Salary  Payable Ledger'), 'Salary Payable');
   assert.equal(formatSubNote('Input CGST 2.5%'), 'Input CGST 2.5%');
 });
@@ -41,6 +41,12 @@ t('formatSubNote: cases across punctuation (initials, parens, hyphens)', () => {
   assert.equal(formatSubNote('Advance S.santhanamuthukrishnan'), 'Advance S. Santhanamuthukrishnan');
   assert.equal(formatSubNote('Consumables (gst)'), 'Consumables (GST)');
   assert.equal(formatSubNote('Adopt Net Tech Pvt Ltd(advance)'), 'Adopt Net Tech Pvt Ltd(Advance)');
+});
+t('formatSubNote: consistent company suffixes', () => {
+  assert.equal(formatSubNote('Bajaj Finance Limited'), 'Bajaj Finance Ltd');
+  assert.equal(formatSubNote('Citius Communications Private Limited'), 'Citius Communications Pvt Ltd');
+  assert.equal(formatSubNote('Adopt Net Tech Pvt. Ltd.'), 'Adopt Net Tech Pvt Ltd');
+  assert.equal(formatSubNote('Virtual Door IT Services LLP'), 'Virtual Door IT Services LLP');
 });
 
 // ---- canonicalizeSubNotes (token-set within a bucket) --------------------
