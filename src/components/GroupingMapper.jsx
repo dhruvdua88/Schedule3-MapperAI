@@ -172,7 +172,7 @@ export function GroupingMapper() {
   const filtered = useMemo(() => {
     if (!results) return [];
     const q = query.trim().toLowerCase();
-    return results.filter((r) => {
+    const rows = results.filter((r) => {
       if (filter === 'review' && r.status !== 'review') return false;
       if (filter === 'fill' && r.action !== 'fill') return false;
       if (filter === 'change' && r.action !== 'change') return false;
@@ -180,6 +180,13 @@ export function GroupingMapper() {
       if (q && !(`${r.ledger} ${r.face} ${r.note} ${r.subNote}`.toLowerCase().includes(q))) return false;
       return true;
     });
+    // Review-oriented filters: show the MATERIAL items first (display only — the
+    // G:I copy/export use `results`, so paste order is unaffected). 'all'/'fill'
+    // keep the original trial-balance order for context.
+    if (filter === 'verify' || filter === 'review' || filter === 'change') {
+      return [...rows].sort((a, b) => Math.abs(b.amount || 0) - Math.abs(a.amount || 0));
+    }
+    return rows;
   }, [results, filter, query]);
 
   const subNoteGroups = useMemo(() => {
