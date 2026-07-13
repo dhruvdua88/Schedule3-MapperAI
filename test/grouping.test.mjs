@@ -88,6 +88,18 @@ t('canonicalizeSubNotes: merges word-order/status variants, not distinct taxes',
   assert.notEqual(rows[0].subNote, rows[2].subNote, 'CGST vs IGST stay distinct');
   assert.equal(rows[3].subNote, rows[4].subNote, 'Dues == Payable unify');
 });
+t('canonicalizeSubNotes: trailing category words (Expenses/Charges) merge; content kept', () => {
+  const F = 'Other expenses';
+  const rows = [
+    row({ face: F, note: 'Repairs to buildings', subNote: 'Repairs & Maintenance' }),
+    row({ face: F, note: 'Repairs to buildings', subNote: 'Repairs & Maintenance- Expenses' }),
+    row({ face: F, note: 'Freight Inward', subNote: 'Freight Charges' }),
+    row({ face: F, note: 'Freight Inward', subNote: 'Freight Inward' }), // different content -> stays
+  ];
+  canonicalizeSubNotes(rows);
+  assert.equal(rows[0].subNote, rows[1].subNote, 'R&M variants merge');
+  assert.notEqual(rows[2].subNote, rows[3].subNote, 'Freight Inward keeps its content');
+});
 
 // ---- applyDeterministicSubNotes (statutory dictionary) ------------------
 t('applyDeterministicSubNotes: GST-input collapse, PF unify, expense untouched', () => {

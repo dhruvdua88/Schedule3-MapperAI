@@ -917,6 +917,10 @@ const _SUBNOTE_STOP = new Set([
   // "Custom Duty" == "Custom Duty Paid"). Dropping them merges the split line.
   'payable', 'payables', 'receivable', 'receivables',
   'due', 'dues', 'outstanding', 'paid', 'payment', 'recoverable',
+  // trailing category words — "Repairs & Maintenance" == "Repairs & Maintenance
+  // Expenses"; "Handling Charges" == "Handling". Content stays (Freight Inward
+  // keeps "inward"), so distinct items are not over-merged.
+  'expense', 'expenses', 'charge', 'charges', 'fee', 'fees',
   'ac', 'account', 'accounts',
 ]);
 function subNoteKey(s) {
