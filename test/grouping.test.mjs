@@ -13,7 +13,7 @@ import {
   applyDeterministicNotes, flagSignAnomalies, flagTallyReview, flagImmaterialSubNotes,
   flagProvisionPlacement, stripRedundantSubNotes, flagYoyReclassification,
   splitDelimited, parsePasted, reviewFlagsText, buildIndexMap, sortSubNotesForFace,
-  isFatalRunError,
+  isFatalRunError, isSummaryRow,
 } from '../src/lib/groupingMap.js';
 import { AuthError, ApiError } from '../src/lib/deepseek.js';
 import { canonicalFace, canonicalNote, NOTES_BY_FACE } from '../src/data/sch3Vocab.js';
@@ -291,6 +291,12 @@ t('parsePasted: robust amount parsing (sign, currency, Cr/Dr, Indian grouping)',
   assert.equal(amt('45000 Dr'), 45000, 'Dr suffix = debit');
   assert.equal(amt('Rs. -1000'), -1000);
   assert.equal(amt('₹1,23,456'), 123456, 'Indian digit grouping');
+});
+t('isSummaryRow: drops totals/balances, keeps real ledgers', () => {
+  for (const s of ['Total', 'Grand Total', 'Sub-Total', 'Opening Balance', 'Closing Balance:', 'Total Dr', 'Balance c/f']) assert.equal(isSummaryRow(s), true, s);
+  for (const s of ['Total Systems Pvt Ltd', 'Opening Stock', 'Subtotal Advance', 'TDS Payable', 'Total Current Assets']) assert.equal(isSummaryRow(s), false, s);
+  const p = parsePasted('Name of Ledger\tAmount\nTDS Payable\t-1000\nTotal\t-1000\nTotal Systems Pvt Ltd\t500');
+  assert.deepEqual(p.rows.map((r) => r.ledger), ['TDS Payable', 'Total Systems Pvt Ltd']);
 });
 t('splitDelimited / CSV: quoted fields keep commas; tab passthrough', () => {
   assert.deepEqual(splitDelimited('"Rao, Sanjay & Co","1,234.50",Other', ','), ['Rao, Sanjay & Co', '1,234.50', 'Other']);

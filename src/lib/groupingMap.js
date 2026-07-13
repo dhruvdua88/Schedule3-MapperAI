@@ -64,6 +64,18 @@ function norm(s) {
   return String(s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+// A row whose ledger cell is an UNAMBIGUOUS total/subtotal/balance marker from a
+// raw TB export — matched by exact (normalised) label so real ledgers that merely
+// start with "Total"/"Opening" (e.g. "Total Systems Pvt Ltd") are never dropped.
+const _SUMMARY_ROWS = new Set([
+  'total', 'grand total', 'sub total', 'subtotal', 'sub-total', 'net total',
+  'opening balance', 'closing balance', 'difference in opening balance',
+  'total dr', 'total cr', 'total debit', 'total credit', 'balance c/f', 'balance b/f',
+]);
+export function isSummaryRow(ledger) {
+  return _SUMMARY_ROWS.has(norm(ledger).replace(/[:]+$/, '').trim());
+}
+
 // Parse an amount robustly. Handles "(1,234.50)" (bracket-negative), a leading OR
 // symbol-preceded minus ("-1234.5", "₹ -45,000", "Rs. -1000"), Indian digit
 // grouping, currency symbols/words (₹ $ € £ Rs INR), and Tally's Cr/Dr suffix
@@ -147,8 +159,10 @@ export function parseGrid(grid) {
     const row = grid[r] || [];
     const ledger = String(row[cols.ledger] ?? '').trim();
     if (!ledger || norm(ledger) === 'name of ledger') continue;
-    // Skip obvious total / blank marker rows.
-    if (/^(grand )?total$/i.test(ledger)) continue;
+    // Skip unambiguous total / subtotal / balance marker rows a raw Tally/Excel TB
+    // carries. EXACT-match only, so real ledgers like "Total Systems Pvt Ltd" or
+    // "Opening Stock" are NOT dropped.
+    if (isSummaryRow(ledger)) continue;
     rows.push({
       idx: rows.length,
       excelRow: r + 1,
