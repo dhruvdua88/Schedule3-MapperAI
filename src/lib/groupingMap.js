@@ -282,8 +282,12 @@ RULES
    - GST input / ITC / RCM input (debit) -> "Other current assets" > "Others".
    - Bank overdraft / cash-credit / OD / CC limit (credit) is SECURED against
      current assets -> "Short term borrowings" > "Secured Loans repayable on
-     demand from banks" (NOT the Unsecured line). Interest on OD -> "Finance
-     costs" > "Interest expense".
+     demand from banks" (NOT the Unsecured line).
+   - INTEREST: only interest on BORROWINGS (bank OD, term loans, debentures,
+     unsecured loans) is a finance cost -> "Finance costs" > "Interest expense".
+     Interest on LATE / DELAYED STATUTORY dues (GST, TDS, income tax, customs,
+     PF) is a penal charge, NOT a borrowing cost -> "Other expenses" > "Rates
+     and taxes". Keep all such statutory-interest ledgers consistent.
    - Imprest / staff advance / salary advance (debit) is an EMPLOYEE advance ->
      "Short term loans and advances" > "Loans and advances to employees" (not
      "Others" or "Advances to suppliers").
