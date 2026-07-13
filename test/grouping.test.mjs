@@ -292,6 +292,15 @@ t('parsePasted: robust amount parsing (sign, currency, Cr/Dr, Indian grouping)',
   assert.equal(amt('Rs. -1000'), -1000);
   assert.equal(amt('₹1,23,456'), 123456, 'Indian digit grouping');
 });
+t('parseGrid: counts interior skips (alignment warning), not leading/trailing', () => {
+  // gap BETWEEN ledgers -> interior skip; trailing total -> not counted
+  let p = parsePasted('Name of Ledger\tAmount\nTDS\t-1\n\t\nGST\t-2\nGrand Total\t-3');
+  assert.equal(p.rows.length, 2);
+  assert.equal(p.interiorSkips, 1, 'the blank row between TDS and GST counts');
+  // no gaps -> 0
+  p = parsePasted('Name of Ledger\tAmount\nTDS\t-1\nGST\t-2');
+  assert.equal(p.interiorSkips, 0);
+});
 t('isSummaryRow: drops totals/balances, keeps real ledgers', () => {
   for (const s of ['Total', 'Grand Total', 'Sub-Total', 'Opening Balance', 'Closing Balance:', 'Total Dr', 'Balance c/f']) assert.equal(isSummaryRow(s), true, s);
   for (const s of ['Total Systems Pvt Ltd', 'Opening Stock', 'Subtotal Advance', 'TDS Payable', 'Total Current Assets']) assert.equal(isSummaryRow(s), false, s);

@@ -310,16 +310,26 @@ export function GroupingMapper() {
           )}
 
           {parsed && (
-            <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13, color: COLORS.TEXT }}>
-                <b>{parsed.rows.length}</b> ledgers detected
-                {parsed.cols.face != null && <span style={{ color: COLORS.TEXT_MUTED }}> · existing Face/Note columns found</span>}
-              </span>
-              <div style={{ flex: 1 }} />
-              <Button onClick={run} disabled={running}>
-                <Play size={14} /> Map {parsed.rows.length} ledgers with AI
-              </Button>
-            </div>
+            <>
+              <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, color: COLORS.TEXT }}>
+                  <b>{parsed.rows.length}</b> ledgers detected
+                  {parsed.cols.face != null && <span style={{ color: COLORS.TEXT_MUTED }}> · existing Face/Note columns found</span>}
+                </span>
+                <div style={{ flex: 1 }} />
+                <Button onClick={run} disabled={running}>
+                  <Play size={14} /> Map {parsed.rows.length} ledgers with AI
+                </Button>
+              </div>
+              {parsed.interiorSkips > 0 && (
+                <div style={{ marginTop: 10, padding: '9px 12px', background: COLORS.HIGH_BG, border: `1px solid ${COLORS.HIGH}`, borderRadius: 6, color: COLORS.HIGH, fontSize: 12, display: 'flex', gap: 8 }}>
+                  <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                  {parsed.interiorSkips} blank/total row(s) sit between ledgers and were skipped. The
+                  "Copy Face·Note·Sub-Note (G:I)" block will NOT be row-aligned to your source —
+                  paste per section, or delete those rows in your sheet first.
+                </div>
+              )}
+            </>
           )}
         </Card>
       )}

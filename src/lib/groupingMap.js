@@ -155,14 +155,20 @@ export function parseGrid(grid) {
   }
 
   const rows = [];
+  // Count rows dropped (blank ledger / summary marker) that fall BETWEEN kept
+  // ledgers — those break row-alignment if the G:I output is block-pasted back.
+  let interiorSkips = 0, pendingSkips = 0;
   for (let r = headerRow + 1; r < grid.length; r++) {
     const row = grid[r] || [];
     const ledger = String(row[cols.ledger] ?? '').trim();
-    if (!ledger || norm(ledger) === 'name of ledger') continue;
-    // Skip unambiguous total / subtotal / balance marker rows a raw Tally/Excel TB
-    // carries. EXACT-match only, so real ledgers like "Total Systems Pvt Ltd" or
-    // "Opening Stock" are NOT dropped.
-    if (isSummaryRow(ledger)) continue;
+    // Skip blank-ledger rows, the header repeated, and unambiguous total/subtotal/
+    // balance markers (EXACT-match, so "Total Systems Pvt Ltd"/"Opening Stock"
+    // are NOT dropped). Track interior skips for the alignment warning.
+    if (!ledger || norm(ledger) === 'name of ledger' || isSummaryRow(ledger)) {
+      if (rows.length > 0) pendingSkips++;     // a skip after at least one kept ledger
+      continue;
+    }
+    interiorSkips += pendingSkips; pendingSkips = 0; // confirmed interior once a later ledger appears
     rows.push({
       idx: rows.length,
       excelRow: r + 1,
@@ -177,7 +183,7 @@ export function parseGrid(grid) {
       pyNote:  cols.pyNote  != null ? String(row[cols.pyNote]  ?? '').trim() : '',
     });
   }
-  return { rows, cols, headerRow, amountCol };
+  return { rows, cols, headerRow, amountCol, interiorSkips };
 }
 
 /** Split one delimited line, honouring double-quoted fields (RFC-4180 basics):
