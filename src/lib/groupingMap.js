@@ -296,8 +296,10 @@ RULES
    - Under "Other expenses" pick the SPECIFIC note, consistently: electricity /
      power / fuel / diesel -> "Power and fuel" (never "Indirect expenses");
      travel / conveyance / reimbursement of travel -> "Travelling Expenses";
-     insurance -> "Insurance"; telephone / internet / mobile -> "Telephone
-     expenses"; rent -> "Rent"; audit fee -> "Auditors' Remuneration". Only use
+     insurance -> "Insurance"; telephone / internet / mobile ONLY -> "Telephone
+     expenses"; rent -> "Rent"; audit fee -> "Auditors' Remuneration". Postage /
+     courier / printing / stationery are NOT telephone -> "Other Business
+     Administrative Expenses" (or "Miscellaneous expenses"). Only use
      "Miscellaneous expenses" / "Other Expenses" when no specific note fits.
 3b. The Tally "sysGroup" (primary > parent group) is STRONG evidence for the
    FACE — trust it unless the ledger name clearly contradicts:
