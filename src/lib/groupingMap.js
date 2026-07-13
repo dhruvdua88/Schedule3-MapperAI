@@ -876,6 +876,8 @@ export function formatSubNote(raw) {
   // Case EVERY alphanumeric run (not just space-delimited tokens) so words after
   // "(", "-" or "." also format — "(gst)" -> "(GST)", "-adaptor" -> "-Adaptor".
   s = s.replace(/[A-Za-z][A-Za-z0-9]*/g, (w, offset, full) => {
+    // Ordinal suffix right after a digit ("1St"/"2Nd" -> "1st"/"2nd").
+    if (offset > 0 && /[0-9]/.test(full[offset - 1]) && /^(st|nd|rd|th)$/i.test(w)) return w.toLowerCase();
     const up = w.toUpperCase();
     if (_SUBNOTE_ACRONYMS.has(up)) return up;                 // known acronym
     // Ordinary words typed in caps ("FLOOR", "RENT", "FEES") must Title-Case, not

@@ -60,6 +60,11 @@ t('formatSubNote: strips leading/trailing separators, collapses doubled', () => 
   assert.equal(formatSubNote('& Something'), 'Something');
   assert.equal(formatSubNote('Foo -- Bar'), 'Foo - Bar');
 });
+t('formatSubNote: lowercases ordinal suffixes after digits', () => {
+  assert.equal(formatSubNote('Rent Noida 2Nd Floor'), 'Rent Noida 2nd Floor');
+  assert.equal(formatSubNote('23Rd Street'), '23rd Street');
+  assert.equal(formatSubNote('St. Xavier Deposit'), 'St. Xavier Deposit'); // "St" not after a digit
+});
 t('formatSubNote: caps ordinary words but keeps real abbreviations', () => {
   assert.equal(formatSubNote('Basement & Ground FLOOR RENT'), 'Basement & Ground Floor Rent');
   assert.equal(formatSubNote('Ashfak SIR Imprest'), 'Ashfak Sir Imprest');
