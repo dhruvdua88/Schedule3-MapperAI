@@ -305,8 +305,11 @@ RULES
      courier / printing / stationery are NOT telephone -> "Other Business
      Administrative Expenses" (or "Miscellaneous expenses"). Software / web /
      domain / hosting / SaaS subscription charges are NOT "Repairs" -> "Other
-     Business Administrative Expenses". Only use "Miscellaneous expenses" /
-     "Other Expenses" when no specific note fits.
+     Business Administrative Expenses". Fines / penalties / late fees for
+     non-compliance are NOT "Rates and taxes" (which is statutory levies -
+     property tax, professional tax, ROC/stamp/registration) -> "Miscellaneous
+     expenses". Only use "Miscellaneous expenses" / "Other Expenses" when no
+     specific note fits.
 3b. The Tally "sysGroup" (primary > parent group) is STRONG evidence for the
    FACE — trust it unless the ledger name clearly contradicts:
      Sundry Creditors -> "Trade payables due to others" (or MSME if micro/small)
