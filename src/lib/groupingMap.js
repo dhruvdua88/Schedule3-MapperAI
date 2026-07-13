@@ -883,6 +883,17 @@ export function formatSubNote(raw) {
        .replace(/\bLimited\b\.?/g, 'Ltd')
        .replace(/\bLtd\.\B/g, 'Ltd')
        .replace(/\bL\.?L\.?P\.?\b/gi, 'LLP');
+  // Drop trailing GST-rate noise so the same concept doesn't fragment by rate:
+  // "Consumables (GST)" / "Consumables @12% GST" -> "Consumables". Guarded so it
+  // never blanks the label (keeps the original if the strip would empty it).
+  {
+    const stripped = s
+      .replace(/\s*[@(]?\s*\d+(?:\.\d+)?\s*%\s*(?:c|s|i|ut)?gst\)?$/i, '')
+      .replace(/\s*@\s*\d+(?:\.\d+)?\s*%$/i, '')
+      .replace(/\s*\(\s*gst\s*\)$/i, '')
+      .trim();
+    if (stripped) s = stripped;
+  }
   // Defensive final polish: drop leading/trailing separators an upstream strip
   // could leave (e.g. "- Delhi Electricity", "Rent Noida -", "Name ,") and
   // collapse any doubled separators. A real label never starts/ends with these.

@@ -42,7 +42,7 @@ t('formatSubNote: strips A/c tail, keeps digits', () => {
 });
 t('formatSubNote: cases across punctuation (initials, parens, hyphens)', () => {
   assert.equal(formatSubNote('Advance S.santhanamuthukrishnan'), 'Advance S. Santhanamuthukrishnan');
-  assert.equal(formatSubNote('Consumables (gst)'), 'Consumables (GST)');
+  assert.equal(formatSubNote('Charges (cctv)'), 'Charges (CCTV)'); // paren-acronym casing (non-GST)
   assert.equal(formatSubNote('Adopt Net Tech Pvt Ltd(advance)'), 'Adopt Net Tech Pvt Ltd(Advance)');
 });
 t('formatSubNote: idempotent + consecutive initials in one pass', () => {
@@ -59,6 +59,13 @@ t('formatSubNote: strips leading/trailing separators, collapses doubled', () => 
   assert.equal(formatSubNote('Name , '), 'Name');
   assert.equal(formatSubNote('& Something'), 'Something');
   assert.equal(formatSubNote('Foo -- Bar'), 'Foo - Bar');
+});
+t('formatSubNote: strips trailing GST-rate noise, no harm to real labels', () => {
+  assert.equal(formatSubNote('Consumables (gst)'), 'Consumables');
+  assert.equal(formatSubNote('Consumables @12% GST'), 'Consumables');
+  assert.equal(formatSubNote('Printing & Stationery'), 'Printing & Stationery');
+  assert.equal(formatSubNote('GST Payable'), 'GST Payable');
+  assert.equal(formatSubNote('GST Input Credit'), 'GST Input Credit');
 });
 t('formatSubNote: consistent company suffixes', () => {
   assert.equal(formatSubNote('Bajaj Finance Limited'), 'Bajaj Finance Ltd');
