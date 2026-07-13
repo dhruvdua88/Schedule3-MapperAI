@@ -16,12 +16,83 @@ import {
   isFatalRunError, isSummaryRow, toGroupingTSV,
 } from '../src/lib/groupingMap.js';
 import { AuthError, ApiError } from '../src/lib/deepseek.js';
-import { canonicalFace, canonicalNote, NOTES_BY_FACE } from '../src/data/sch3Vocab.js';
+import { canonicalFace, canonicalNote, NOTES_BY_FACE, FACE_HEADS } from '../src/data/sch3Vocab.js';
 
 let passed = 0;
 const cases = [];
 function t(name, fn) { cases.push([name, fn]); }
 const row = (o) => ({ face: '', note: '', subNote: '', ledger: '', amount: null, sysPrimary: '', flags: [], ...o });
+
+// Run the deterministic pipeline in the same order as mapGroupings (no DeepSeek).
+function runDeterministic(results) {
+  applyDeterministicNotes(results);
+  flagTallyReview(results);
+  flagSignAnomalies(results);
+  flagProvisionPlacement(results);
+  flagYoyReclassification(results);
+  applyDeterministicSubNotes(results);
+  for (const r of results) if (r.subNote) r.subNote = formatSubNote(r.subNote);
+  canonicalizeSubNotes(results);
+  stripRedundantSubNotes(results);
+  flagImmaterialSubNotes(results);
+  return results;
+}
+
+// ---- INTEGRATION: diverse Schedule III fixture (patterns beyond Fortius) ----
+t('integration: diverse fixture stays in-vocab and folds correctly', () => {
+  const R = runDeterministic([
+    // investments (Fortius has none)
+    row({ ledger: 'Reliance Equity Shares', face: 'Non current investments', note: 'Quoted Trade Investments in Equity Instruments', subNote: 'Reliance Equity', amount: 500000 }),
+    row({ ledger: 'HDFC Liquid Fund', face: 'Current investments', note: 'Unquoted Trade Investments in Mutual Funds', subNote: 'HDFC Liquid Fund', amount: 300000 }),
+    // MSME creditor (aggregate face -> blank sub)
+    row({ ledger: 'Small Vendor Pvt Ltd', face: 'Trade payables due to MSME', note: 'Due to Micro and Small Enterprises', subNote: '', amount: -80000 }),
+    // secured term loan, share premium, CWIP, DTA, capital advance
+    row({ ledger: 'HDFC Term Loan', face: 'Long term borrowings', note: 'Secured Term loans from banks', subNote: 'HDFC Term Loan', amount: -5000000 }),
+    row({ ledger: 'Securities Premium', face: 'Reserves and surplus', note: 'Securities Premium', subNote: 'Securities Premium', amount: -2000000 }),
+    row({ ledger: 'Building under construction', face: 'Capital work in progress', note: 'Captured in Notes-2', subNote: 'Building WIP', amount: 900000 }),
+    row({ ledger: 'Deferred Tax Asset', face: 'Deferred tax assets net', note: 'Specify at level 3', subNote: 'Deferred Tax Asset', amount: 40000 }),
+    row({ ledger: 'Advance for Machinery', face: 'Long term loans and advances', note: 'Capital Advances', subNote: 'Advance for Machinery', amount: 250000 }),
+    // GST input variants (asset) -> one line
+    row({ ledger: 'Input CGST', face: 'Other current assets', note: 'Others', subNote: 'CGST Input', amount: 12000 }),
+    row({ ledger: 'RCM SGST', face: 'Other current assets', note: 'Others', subNote: 'RCM SGST Input', amount: 3000 }),
+    // GST payable variants (liab) -> one line
+    row({ ledger: 'IGST Output', face: 'Other current liabilities', note: 'Statutory dues', subNote: 'IGST Payable', amount: -15000 }),
+    row({ ledger: 'RCM CGST Payable', face: 'Other current liabilities', note: 'Statutory dues', subNote: 'RCM CGST Payable', amount: -2000 }),
+    // imprests -> one line ; prepayments -> one line
+    row({ ledger: 'Ramesh Imprest', face: 'Short term loans and advances', note: 'Loans and advances to employees', subNote: 'Ramesh Imprest', amount: 5000 }),
+    row({ ledger: 'Suresh Imprest', face: 'Short term loans and advances', note: 'Loans and advances to employees', subNote: 'Suresh Imprest', amount: 4000 }),
+    row({ ledger: 'Prepaid Insurance', face: 'Other current assets', note: 'Others', subNote: 'Prepaid Insurance', amount: 8000 }),
+    row({ ledger: 'Prepaid Rent', face: 'Other current assets', note: 'Others', subNote: 'Prepaid Rent', amount: 6000 }),
+    // trade receivable (aggregate -> blank sub) ; bank OD (unsecured -> secured)
+    row({ ledger: 'ABC Customer', face: 'Trade receivables', note: 'Unsecured considered good', subNote: '', amount: 400000 }),
+    row({ ledger: 'ICICI Bank OD-1234', face: 'Short term borrowings', note: 'Unsecured Loans repayable on demand from banks', subNote: 'ICICI OD', amount: -700000 }),
+    // provision mis-parked -> flagged
+    row({ ledger: 'Provision for Income Tax', face: 'Other current liabilities', note: 'Other payables', subNote: 'Provision for Income Tax', amount: -120000 }),
+  ]);
+
+  // (a) core generalisation invariant: every value stays in the workbook vocab
+  for (const r of R) {
+    assert.ok(FACE_HEADS.includes(r.face), `face in vocab: ${r.face}`);
+    assert.ok(NOTES_BY_FACE[r.face].includes(r.note), `note in vocab: ${r.face} > ${r.note}`);
+  }
+  const sub = (led) => R.find((r) => r.ledger === led).subNote;
+  // (b) folds
+  assert.equal(sub('Input CGST'), 'GST Input Credit');
+  assert.equal(sub('RCM SGST'), 'GST Input Credit');
+  assert.equal(sub('IGST Output'), 'GST Payable');
+  assert.equal(sub('RCM CGST Payable'), 'GST Payable');
+  assert.equal(sub('Ramesh Imprest'), 'Imprest to Staff');
+  assert.equal(sub('Suresh Imprest'), 'Imprest to Staff');
+  assert.equal(sub('Prepaid Insurance'), 'Prepaid Expenses');
+  assert.equal(sub('Prepaid Rent'), 'Prepaid Expenses');
+  // (c) deterministic note correction
+  assert.equal(R.find((r) => r.ledger === 'ICICI Bank OD-1234').note, 'Secured Loans repayable on demand from banks');
+  // (d) aggregate faces stay blank (validateMapping blanks them; passes never refill)
+  assert.equal(sub('Small Vendor Pvt Ltd'), '');
+  assert.equal(sub('ABC Customer'), '');
+  // (e) provision mis-placement flagged
+  assert.ok(R.find((r) => r.ledger === 'Provision for Income Tax').flags.some((f) => /provision/.test(f)));
+});
 
 // ---- formatSubNote --------------------------------------------------------
 t('formatSubNote: acronyms upper, small words lower', () => {
