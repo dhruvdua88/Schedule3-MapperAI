@@ -765,7 +765,7 @@ const _LIAB_FACES = new Set([
 ]);
 // { re: ledger test, side: 'asset'|'liab', sub: canonical } — first match wins.
 const _DSUB_RULES = [
-  { re: /(input|itc)\s*(c|s|i|ut)?gst|(c|s|i|ut)?gst\s*(input|itc|credit)|\binput tax credit\b|\bitc\b/i, side: 'asset', sub: 'GST Input Credit' },
+  { re: /(input|itc)\s*(c|s|i|ut)?gst|(c|s|i|ut)?gst\s*(input|itc|credit)|\binput tax credit\b|\bitc\b|rcm\s*(input\s*)?(c|s|i|ut)?gst/i, side: 'asset', sub: 'GST Input Credit' },
   { re: /\btds\b|tax deducted at source/i,               side: 'asset', sub: 'TDS Receivable' },
   { re: /\btds\b|\btcs\b|tax deducted|tax collected/i,   side: 'liab',  sub: 'TDS Payable' },
   { re: /provident\s*fund|\bepf\b|\bp\.?f\.?\b/i,        side: 'liab',  sub: 'PF Payable' },

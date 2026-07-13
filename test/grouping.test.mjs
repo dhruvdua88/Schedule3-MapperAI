@@ -107,6 +107,17 @@ t('applyDeterministicSubNotes: imprests collapse to one line', () => {
   applyDeterministicSubNotes(rows);
   assert.ok(rows.every((r) => r.subNote === 'Imprest to Staff'), 'all imprests -> one line');
 });
+t('applyDeterministicSubNotes: RCM input (asset) -> GST Input Credit; RCM payable (liab) untouched', () => {
+  const rows = [
+    row({ ledger: 'RCM CGST', face: 'Other current assets', subNote: 'RCM CGST Input' }),
+    row({ ledger: 'RCM IGST', face: 'Other current assets', subNote: 'RCM IGST Input' }),
+    row({ ledger: 'RCM CGST Payable', face: 'Other current liabilities', subNote: 'RCM CGST Payable' }),
+  ];
+  applyDeterministicSubNotes(rows);
+  assert.equal(rows[0].subNote, 'GST Input Credit');
+  assert.equal(rows[1].subNote, 'GST Input Credit');
+  assert.equal(rows[2].subNote, 'RCM CGST Payable', 'liability-side RCM payable untouched');
+});
 
 // ---- applyDeterministicNotes (secured bank OD) --------------------------
 t('applyDeterministicNotes: bank OD/CC -> secured, credit card untouched', () => {
