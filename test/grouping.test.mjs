@@ -98,6 +98,15 @@ t('applyDeterministicSubNotes: GST-input collapse, PF unify, expense untouched',
   assert.equal(rows[3].subNote, 'Admin Charges on PF', 'expense face untouched');
   assert.equal(rows[4].subNote, 'GST Cash Balance', 'non-input GST untouched');
 });
+t('applyDeterministicSubNotes: imprests collapse to one line', () => {
+  const rows = [
+    row({ ledger: 'Mahender Imprest', face: 'Short term loans and advances', subNote: 'Mahender Imprest' }),
+    row({ ledger: 'Ashfak SIR Imprest', face: 'Short term loans and advances', subNote: 'Ashfak SIR Imprest' }),
+    row({ ledger: 'Imprest to Staff', face: 'Short term loans and advances', subNote: 'Imprest to Staff' }),
+  ];
+  applyDeterministicSubNotes(rows);
+  assert.ok(rows.every((r) => r.subNote === 'Imprest to Staff'), 'all imprests -> one line');
+});
 
 // ---- applyDeterministicNotes (secured bank OD) --------------------------
 t('applyDeterministicNotes: bank OD/CC -> secured, credit card untouched', () => {

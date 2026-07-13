@@ -771,6 +771,9 @@ const _DSUB_RULES = [
   { re: /provident\s*fund|\bepf\b|\bp\.?f\.?\b/i,        side: 'liab',  sub: 'PF Payable' },
   { re: /\besic?\b|employee'?s?\s*state\s*insurance/i,   side: 'liab',  sub: 'ESIC Payable' },
   { re: /profession(al)?\s*tax|\bp\.?tax\b/i,            side: 'liab',  sub: 'Profession Tax Payable' },
+  // Staff imprests (petty-cash floats) are immaterial and shown in aggregate —
+  // collapse the per-person lines to ONE "Imprest to Staff" presentation line.
+  { re: /\bimprest\b/i,                                 side: 'asset', sub: 'Imprest to Staff' },
 ];
 export function applyDeterministicSubNotes(results) {
   let n = 0;
