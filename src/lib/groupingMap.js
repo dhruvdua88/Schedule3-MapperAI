@@ -880,10 +880,11 @@ export function formatSubNote(raw) {
     if (offset > 0 && /[0-9]/.test(full[offset - 1]) && /^(st|nd|rd|th)$/i.test(w)) return w.toLowerCase();
     const up = w.toUpperCase();
     if (_SUBNOTE_ACRONYMS.has(up)) return up;                 // known acronym
-    // Ordinary words typed in caps ("FLOOR", "RENT", "FEES") must Title-Case, not
-    // be mistaken for acronyms; genuine short abbreviations (FF, GF, WH, DG) fall
-    // through to the acronym-preserve rule below.
-    if (!_NOT_ACRONYM_WORDS.has(up) && /^[A-Z0-9]{2,5}$/.test(w) && !/[a-z]/.test(w)) return w;
+    // Preserve genuine short all-caps abbreviations (CCTV, MLWF, EDLI, FF, DG).
+    // Cap the heuristic at 4 chars: 5-char all-caps is far more often a proper
+    // noun typed in caps (BAJAJ, NOIDA, DELHI) than an acronym — those Title-Case;
+    // genuine 5-char acronyms (GSTIN, UTGST) are kept via the allow-list above.
+    if (!_NOT_ACRONYM_WORDS.has(up) && /^[A-Z0-9]{2,4}$/.test(w) && !/[a-z]/.test(w)) return w;
     const lw = w.toLowerCase();
     const atWordStart = offset === 0 || full[offset - 1] === ' ';
     if (offset > 0 && atWordStart && _SUBNOTE_SMALL.has(lw)) return lw; // small joining word

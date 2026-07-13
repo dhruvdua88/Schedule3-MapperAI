@@ -68,9 +68,12 @@ t('formatSubNote: lowercases ordinal suffixes after digits', () => {
 t('formatSubNote: caps ordinary words but keeps real abbreviations', () => {
   assert.equal(formatSubNote('Basement & Ground FLOOR RENT'), 'Basement & Ground Floor Rent');
   assert.equal(formatSubNote('Ashfak SIR Imprest'), 'Ashfak Sir Imprest');
-  assert.equal(formatSubNote('EDLI Charges'), 'EDLI Charges');   // real abbreviation kept
+  assert.equal(formatSubNote('EDLI Charges'), 'EDLI Charges');   // 4-char abbreviation kept
   assert.equal(formatSubNote('FF C-128'), 'FF C-128');           // floor abbrev kept
   assert.equal(formatSubNote('CCTV'), 'CCTV');
+  assert.equal(formatSubNote('BAJAJ Finance Ltd'), 'Bajaj Finance Ltd'); // 5-char proper noun
+  assert.equal(formatSubNote('NOIDA Office'), 'Noida Office');
+  assert.equal(formatSubNote('GSTIN Registration'), 'GSTIN Registration'); // 5-char acronym (allow-list)
 });
 t('formatSubNote: strips trailing GST-rate noise, no harm to real labels', () => {
   assert.equal(formatSubNote('Consumables (gst)'), 'Consumables');
