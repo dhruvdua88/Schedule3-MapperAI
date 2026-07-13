@@ -13,7 +13,7 @@ import {
   applyDeterministicNotes, flagSignAnomalies, flagTallyReview, flagImmaterialSubNotes,
   flagProvisionPlacement, stripRedundantSubNotes, flagYoyReclassification,
   splitDelimited, parsePasted, reviewFlagsText, buildIndexMap, sortSubNotesForFace,
-  isFatalRunError, isSummaryRow,
+  isFatalRunError, isSummaryRow, toGroupingTSV,
 } from '../src/lib/groupingMap.js';
 import { AuthError, ApiError } from '../src/lib/deepseek.js';
 import { canonicalFace, canonicalNote, NOTES_BY_FACE } from '../src/data/sch3Vocab.js';
@@ -291,6 +291,17 @@ t('parsePasted: robust amount parsing (sign, currency, Cr/Dr, Indian grouping)',
   assert.equal(amt('45000 Dr'), 45000, 'Dr suffix = debit');
   assert.equal(amt('Rs. -1000'), -1000);
   assert.equal(amt('₹1,23,456'), 123456, 'Indian digit grouping');
+});
+t('toGroupingTSV: layout keeps G:I row-aligned across skips', () => {
+  const p = parsePasted('Name of Ledger\tAmount\tFace Grouping\tNote Grouping\tSub-Note Grouping\nTDS\t-1\tOther current liabilities\tStatutory dues\tTDS Payable\n\t\t\t\t\nGST\t-2\tOther current liabilities\tStatutory dues\tGST Payable');
+  assert.deepEqual(p.layout, [0, null, 1]);
+  const results = p.rows.map((r) => ({ idx: r.idx, face: r.curFace, note: r.curNote, subNote: r.curSub, accepted: true }));
+  const lines = toGroupingTSV(results, p.layout).split('\n');
+  assert.equal(lines.length, 3, 'blank line inserted at the gap');
+  assert.equal(lines[1], '\t\t', 'gap row is blank');
+  assert.ok(lines[0].includes('TDS Payable') && lines[2].includes('GST Payable'));
+  // no layout -> compact (clean case), 2 lines
+  assert.equal(toGroupingTSV(results).split('\n').length, 2);
 });
 t('parseGrid: counts interior skips (alignment warning), not leading/trailing', () => {
   // gap BETWEEN ledgers -> interior skip; trailing total -> not counted

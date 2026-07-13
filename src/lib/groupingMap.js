@@ -155,20 +155,22 @@ export function parseGrid(grid) {
   }
 
   const rows = [];
-  // Count rows dropped (blank ledger / summary marker) that fall BETWEEN kept
-  // ledgers — those break row-alignment if the G:I output is block-pasted back.
-  let interiorSkips = 0, pendingSkips = 0;
+  // `layout` records the source-row sequence from the first kept ledger down:
+  // each entry is a kept row's idx, or null for a skipped interior row (blank
+  // ledger / total marker). It lets the G:I copy stay ROW-ALIGNED to the source
+  // by emitting blank lines at the skip positions. Trailing nulls are trimmed.
+  const layout = [];
   for (let r = headerRow + 1; r < grid.length; r++) {
     const row = grid[r] || [];
     const ledger = String(row[cols.ledger] ?? '').trim();
     // Skip blank-ledger rows, the header repeated, and unambiguous total/subtotal/
     // balance markers (EXACT-match, so "Total Systems Pvt Ltd"/"Opening Stock"
-    // are NOT dropped). Track interior skips for the alignment warning.
+    // are NOT dropped).
     if (!ledger || norm(ledger) === 'name of ledger' || isSummaryRow(ledger)) {
-      if (rows.length > 0) pendingSkips++;     // a skip after at least one kept ledger
+      if (rows.length > 0) layout.push(null);  // interior (post-first-ledger) skip
       continue;
     }
-    interiorSkips += pendingSkips; pendingSkips = 0; // confirmed interior once a later ledger appears
+    layout.push(rows.length);                  // this row's idx
     rows.push({
       idx: rows.length,
       excelRow: r + 1,
@@ -183,7 +185,9 @@ export function parseGrid(grid) {
       pyNote:  cols.pyNote  != null ? String(row[cols.pyNote]  ?? '').trim() : '',
     });
   }
-  return { rows, cols, headerRow, amountCol, interiorSkips };
+  while (layout.length && layout[layout.length - 1] === null) layout.pop(); // trim trailing skips
+  const interiorSkips = layout.filter((x) => x === null).length;
+  return { rows, cols, headerRow, amountCol, interiorSkips, layout };
 }
 
 /** Split one delimited line, honouring double-quoted fields (RFC-4180 basics):
@@ -930,12 +934,19 @@ export function canonicalizeSubNotes(results) {
 // ---- Output builders ----------------------------------------------------
 
 /** TSV of just the 3 grouping columns (Face, Note, Sub-Note) in row order —
- *  paste directly into the tool's G:I. Only accepted rows are written. */
-export function toGroupingTSV(results) {
-  return results
-    .filter((r) => r.accepted)
-    .map((r) => [r.face, r.note, r.subNote].join('\t'))
-    .join('\n');
+ *  paste directly into the tool's G:I.
+ *
+ *  Pass the parse `layout` (from parseGrid) to keep the output ROW-ALIGNED to the
+ *  source when blank/total rows were skipped: a blank line is emitted at each skip
+ *  position so a block-paste back into the tool lines up. Without a layout it
+ *  emits one line per result in order (the clean, gap-free case). */
+export function toGroupingTSV(results, layout) {
+  const line = (r) => (r && r.accepted !== false ? [r.face, r.note, r.subNote].join('\t') : '\t\t');
+  if (Array.isArray(layout) && layout.some((x) => x === null)) {
+    const byIdx = new Map(results.map((r) => [r.idx, r]));
+    return layout.map((x) => (x === null ? '\t\t' : line(byIdx.get(x)))).join('\n');
+  }
+  return results.filter((r) => r.accepted !== false).map(line).join('\n');
 }
 
 /** Human-readable, reviewer-ACTIONABLE flags for a row — the QC signals worth a

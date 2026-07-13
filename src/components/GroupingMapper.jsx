@@ -202,7 +202,7 @@ export function GroupingMapper() {
       (a.face || '').localeCompare(b.face || '') || (a.note || '').localeCompare(b.note || '') || (a.subNote || '').localeCompare(b.subNote || ''));
   }, [results]);
 
-  const acceptedTSV = results ? toGroupingTSV(results) : '';
+  const acceptedTSV = results ? toGroupingTSV(results, parsed?.layout) : '';
   const verifyCount = useMemo(
     () => (results || []).filter((r) => (r.flags || []).some((f) => f.startsWith('verify:'))).length,
     [results],
@@ -325,8 +325,8 @@ export function GroupingMapper() {
                 <div style={{ marginTop: 10, padding: '9px 12px', background: COLORS.HIGH_BG, border: `1px solid ${COLORS.HIGH}`, borderRadius: 6, color: COLORS.HIGH, fontSize: 12, display: 'flex', gap: 8 }}>
                   <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
                   {parsed.interiorSkips} blank/total row(s) sit between ledgers and were skipped. The
-                  "Copy Face·Note·Sub-Note (G:I)" block will NOT be row-aligned to your source —
-                  paste per section, or delete those rows in your sheet first.
+                  "Copy Face·Note·Sub-Note (G:I)" block inserts blank lines at those positions so it
+                  stays row-aligned with your source on a block-paste.
                 </div>
               )}
             </>
