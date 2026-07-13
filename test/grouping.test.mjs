@@ -107,16 +107,32 @@ t('applyDeterministicSubNotes: imprests collapse to one line', () => {
   applyDeterministicSubNotes(rows);
   assert.ok(rows.every((r) => r.subNote === 'Imprest to Staff'), 'all imprests -> one line');
 });
-t('applyDeterministicSubNotes: RCM input (asset) -> GST Input Credit; RCM payable (liab) untouched', () => {
+t('applyDeterministicSubNotes: RCM input (asset) -> GST Input Credit; RCM payable (liab) -> GST Payable', () => {
   const rows = [
     row({ ledger: 'RCM CGST', face: 'Other current assets', subNote: 'RCM CGST Input' }),
     row({ ledger: 'RCM IGST', face: 'Other current assets', subNote: 'RCM IGST Input' }),
     row({ ledger: 'RCM CGST Payable', face: 'Other current liabilities', subNote: 'RCM CGST Payable' }),
   ];
   applyDeterministicSubNotes(rows);
-  assert.equal(rows[0].subNote, 'GST Input Credit');
+  assert.equal(rows[0].subNote, 'GST Input Credit', 'asset RCM -> input credit');
   assert.equal(rows[1].subNote, 'GST Input Credit');
-  assert.equal(rows[2].subNote, 'RCM CGST Payable', 'liability-side RCM payable untouched');
+  assert.equal(rows[2].subNote, 'GST Payable', 'liability RCM -> GST Payable line');
+});
+t('applyDeterministicSubNotes: output GST payable folds to one line; penalties excluded', () => {
+  const F = 'Other current liabilities';
+  const rows = [
+    row({ ledger: 'RCM CGST Payable', face: F, subNote: 'RCM CGST Payable' }),
+    row({ ledger: 'IGST Import', face: F, subNote: 'IGST Import Payable' }),
+    row({ ledger: 'CGST @ 9%', face: F, subNote: 'CGST Payable' }),
+    row({ ledger: 'GST Non Compliance', face: F, subNote: 'GST Non Compliance' }),
+    row({ ledger: 'MLWF Payable', face: F, subNote: 'MLWF Payable' }),
+  ];
+  applyDeterministicSubNotes(rows);
+  assert.equal(rows[0].subNote, 'GST Payable');
+  assert.equal(rows[1].subNote, 'GST Payable');
+  assert.equal(rows[2].subNote, 'GST Payable');
+  assert.equal(rows[3].subNote, 'GST Non Compliance', 'penalty excluded');
+  assert.equal(rows[4].subNote, 'MLWF Payable', 'non-GST untouched');
 });
 
 // ---- applyDeterministicNotes (secured bank OD) --------------------------

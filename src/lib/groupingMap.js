@@ -771,6 +771,11 @@ const _DSUB_RULES = [
   { re: /provident\s*fund|\bepf\b|\bp\.?f\.?\b/i,        side: 'liab',  sub: 'PF Payable' },
   { re: /\besic?\b|employee'?s?\s*state\s*insurance/i,   side: 'liab',  sub: 'ESIC Payable' },
   { re: /profession(al)?\s*tax|\bp\.?tax\b/i,            side: 'liab',  sub: 'Profession Tax Payable' },
+  // Output GST payable (CGST/SGST/IGST/import/RCM) -> ONE "GST Payable" line.
+  // exclude: penalties / interest / non-compliance / any input-side wording.
+  { re: /\b(c|s|i|ut)?gst\b|goods\s*(and|&)?\s*service\s*tax|rcm.*gst|gst.*rcm/i,
+    exclude: /non.?compliance|penalt|interest|late\s*fee|refund|input|\bitc\b|receivable|cash\s*balance/i,
+    side: 'liab',  sub: 'GST Payable' },
   // Staff imprests (petty-cash floats) are immaterial and shown in aggregate —
   // collapse the per-person lines to ONE "Imprest to Staff" presentation line.
   { re: /\bimprest\b/i,                                 side: 'asset', sub: 'Imprest to Staff' },
@@ -781,7 +786,8 @@ export function applyDeterministicSubNotes(results) {
     if (!r.face || AGGREGATE_FACES.has(r.face)) continue;   // aggregate faces carry no sub-note
     const side = _ASSET_FACES.has(r.face) ? 'asset' : _LIAB_FACES.has(r.face) ? 'liab' : null;
     if (!side) continue;                                    // expense/income/equity — leave AI's label
-    const hit = _DSUB_RULES.find((rule) => rule.side === side && rule.re.test(r.ledger));
+    const hit = _DSUB_RULES.find((rule) => rule.side === side && rule.re.test(r.ledger)
+      && !(rule.exclude && rule.exclude.test(r.ledger)));
     if (hit && r.subNote !== hit.sub) {
       r.subNote = hit.sub;
       if (!r.flags.includes('deterministic sub-note')) r.flags.push('deterministic sub-note');
