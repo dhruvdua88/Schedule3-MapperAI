@@ -1231,6 +1231,12 @@ RULES
      "PF & ESI Payable"; GST ledgers -> "GST Payable"; multiple vendor advances
      -> "Advances to Vendors"; salary/bonus/incentive payables -> "Employee
      Dues Payable"; audit/professional fee payables -> "Provision for Expenses".
+   - CANONICAL LABELS — use these EXACT sub-notes so every variant collapses to
+     one line: input GST / ITC / RCM-input -> "GST Input Credit"; output GST
+     (CGST/SGST/IGST/import/RCM payable) -> "GST Payable"; TDS payable -> "TDS
+     Payable"; TDS receivable -> "TDS Receivable"; provident fund -> "PF Payable";
+     ESI/ESIC -> "ESIC Payable"; profession tax -> "Profession Tax Payable"; any
+     staff imprest -> "Imprest to Staff"; any prepayment -> "Prepaid Expenses".
    - LEAVE subNote BLANK ("") for Trade payables (creditors) and Trade
      receivables (debtors) — these are shown in aggregate with an MSME/others +
      ageing schedule, NOT by individual party. Never put a party name there.
