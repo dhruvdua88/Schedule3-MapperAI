@@ -1177,6 +1177,10 @@ RULES
      > "Security Deposits"; if clearly < 12 months -> "Short term loans and
      advances" > "Others".
    - GST input / ITC / RCM input (debit) -> "Other current assets" > "Others".
+   - Accrued / unbilled revenue / accrued income (debit) is an ASSET ->
+     "Other current assets" > "Interest accrued" (if interest) else "Others";
+     never a payable. Income received in advance / unearned (credit) ->
+     "Other current liabilities" > "Income received in advance".
    - Bank overdraft / cash-credit / OD / CC limit (credit) is SECURED against
      current assets -> "Short term borrowings" > "Secured Loans repayable on
      demand from banks" (NOT the Unsecured line).
