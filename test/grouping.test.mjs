@@ -60,6 +60,13 @@ t('formatSubNote: strips leading/trailing separators, collapses doubled', () => 
   assert.equal(formatSubNote('& Something'), 'Something');
   assert.equal(formatSubNote('Foo -- Bar'), 'Foo - Bar');
 });
+t('formatSubNote: caps ordinary words but keeps real abbreviations', () => {
+  assert.equal(formatSubNote('Basement & Ground FLOOR RENT'), 'Basement & Ground Floor Rent');
+  assert.equal(formatSubNote('Ashfak SIR Imprest'), 'Ashfak Sir Imprest');
+  assert.equal(formatSubNote('EDLI Charges'), 'EDLI Charges');   // real abbreviation kept
+  assert.equal(formatSubNote('FF C-128'), 'FF C-128');           // floor abbrev kept
+  assert.equal(formatSubNote('CCTV'), 'CCTV');
+});
 t('formatSubNote: strips trailing GST-rate noise, no harm to real labels', () => {
   assert.equal(formatSubNote('Consumables (gst)'), 'Consumables');
   assert.equal(formatSubNote('Consumables @12% GST'), 'Consumables');

@@ -848,6 +848,15 @@ const _SUBNOTE_ACRONYMS = new Set([
   'MSME', 'TReDS', 'ROC', 'MCA', 'DTA', 'DTL', 'FD', 'RD', 'NBFC',
 ]);
 const _SUBNOTE_SMALL = new Set(['of', 'to', 'and', 'for', 'on', 'in', 'the', 'a', 'an', 'at', 'by', 'as', 'or']);
+// Common English words that are NOT acronyms even when a ledger types them in
+// caps — force Title Case ("FLOOR RENT" -> "Floor Rent"). Genuine abbreviations
+// (FF, GF, WH, DG, EDLI) are absent, so they keep their caps.
+const _NOT_ACRONYM_WORDS = new Set([
+  'FLOOR', 'RENT', 'FEES', 'FEE', 'STAFF', 'SALARY', 'WAGES', 'CASH', 'LOAN',
+  'SHOP', 'ROOM', 'HALL', 'GATE', 'ROAD', 'SITE', 'WORK', 'PART', 'SALE',
+  'SALES', 'STOCK', 'DUTY', 'CESS', 'FUND', 'FUNDS', 'SIR', 'MISC', 'TOTAL',
+  'OTHER', 'MAIN', 'NEW', 'OLD', 'NET', 'TAX', 'BANK', 'PETTY', 'PLANT',
+]);
 const _SUBNOTE_TAIL = /\s*[-–—]?\s*(a\/c|account|ledger|g\/l)\.?$/i;
 
 export function formatSubNote(raw) {
@@ -869,7 +878,10 @@ export function formatSubNote(raw) {
   s = s.replace(/[A-Za-z][A-Za-z0-9]*/g, (w, offset, full) => {
     const up = w.toUpperCase();
     if (_SUBNOTE_ACRONYMS.has(up)) return up;                 // known acronym
-    if (/^[A-Z0-9]{2,5}$/.test(w) && !/[a-z]/.test(w)) return w; // already an acronym (CCTV)
+    // Ordinary words typed in caps ("FLOOR", "RENT", "FEES") must Title-Case, not
+    // be mistaken for acronyms; genuine short abbreviations (FF, GF, WH, DG) fall
+    // through to the acronym-preserve rule below.
+    if (!_NOT_ACRONYM_WORDS.has(up) && /^[A-Z0-9]{2,5}$/.test(w) && !/[a-z]/.test(w)) return w;
     const lw = w.toLowerCase();
     const atWordStart = offset === 0 || full[offset - 1] === ' ';
     if (offset > 0 && atWordStart && _SUBNOTE_SMALL.has(lw)) return lw; // small joining word
