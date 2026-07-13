@@ -1151,6 +1151,11 @@ RULES
    Do not paraphrase, re-case, singularise, or invent — an unlisted value is a
    validation error. If the ledger truly fits no listed note, pick the face's
    "Specify at level 3" (if present) and put the detail in subNote.
+2a. Prefer the MOST SPECIFIC valid note over a generic catch-all: a supplier /
+   vendor advance -> "Short term loans and advances" > "Advances to suppliers"
+   (not "Other current assets" > "Others"); a capital advance -> "Capital
+   Advances"; a security deposit -> "Security Deposits". Only fall back to
+   "Others" / "Other payables" when no specific note fits.
 3. Use the sign of "amount" and the Tally sysGroup as evidence: negative =
    credit balance (liability / income / capital); positive = debit (asset /
    expense). A ledger named like a bank/party/tax tells you its head.
