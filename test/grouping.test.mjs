@@ -52,6 +52,12 @@ t('integration: diverse fixture stays in-vocab and folds correctly', () => {
     row({ ledger: 'Building under construction', face: 'Capital work in progress', note: 'Captured in Notes-2', subNote: 'Building WIP', amount: 900000 }),
     row({ ledger: 'Deferred Tax Asset', face: 'Deferred tax assets net', note: 'Specify at level 3', subNote: 'Deferred Tax Asset', amount: 40000 }),
     row({ ledger: 'Advance for Machinery', face: 'Long term loans and advances', note: 'Capital Advances', subNote: 'Advance for Machinery', amount: 250000 }),
+    // depreciation / amortisation / tax (P&L + contra)
+    row({ ledger: 'Depreciation', face: 'Depreciation and amortization expenses', note: 'Depreciation on property, plant and equipment', subNote: 'Depreciation', amount: 400000 }),
+    row({ ledger: 'Amortisation of Software', face: 'Depreciation and amortization expenses', note: 'Amortization of intangible assets', subNote: 'Amortisation of Software', amount: 60000 }),
+    row({ ledger: 'Accumulated Depreciation on Plant', face: 'Property Plant and Equipment', note: 'Captured from FAR', subNote: 'Accumulated Depreciation', amount: -900000 }),
+    row({ ledger: 'Income Tax', face: 'Tax Expenses', note: 'Current Tax', subNote: 'Income Tax', amount: 200000 }),
+    row({ ledger: 'Deferred Tax Liability', face: 'Deferred tax liabilities Net', note: 'Specify at level 3', subNote: 'Deferred Tax Liability', amount: -75000 }),
     // GST input variants (asset) -> one line
     row({ ledger: 'Input CGST', face: 'Other current assets', note: 'Others', subNote: 'CGST Input', amount: 12000 }),
     row({ ledger: 'RCM SGST', face: 'Other current assets', note: 'Others', subNote: 'RCM SGST Input', amount: 3000 }),
