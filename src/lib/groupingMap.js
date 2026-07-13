@@ -211,32 +211,21 @@ export function parsePasted(text) {
 
 // ---- Prompt -------------------------------------------------------------
 
-const SYSTEM_PROMPT =
-  'You are a senior Indian Chartered Accountant preparing a Schedule III (Division I, ' +
-  'Companies Act 2013) balance sheet. You map trial-balance ledgers to the correct ' +
-  'Face head and Note grouping, and you draft tidy Sub-Note presentation groups. ' +
-  'You never invent Face or Note values outside the supplied controlled vocabulary. ' +
-  'Return ONLY valid JSON.';
-
 // Compact the controlled vocabulary for the prompt (face => notes).
 function vocabBlock() {
   return FACE_HEADS.map((f) => `- ${f}: ${NOTES_BY_FACE[f].join(' | ')}`).join('\n');
 }
 
-function buildUserPrompt(chunk) {
-  const ledgers = chunk.map((r) => ({
-    i: r.idx,
-    ledger: r.ledger,
-    sysGroup: [r.sysPrimary, r.sysParent].filter(Boolean).join(' > ') || undefined,
-    amount: r.amount ?? undefined,
-    curFace: r.curFace || undefined,
-    curNote: r.curNote || undefined,
-    curSub: r.curSub || undefined,
-    pyFace: r.pyFace || undefined,
-    pyNote: r.pyNote || undefined,
-  }));
-
-  return `You are filling the Schedule III Automation Tool's grouping columns. The
+// The persona + validation vocabulary + all classification rules are IDENTICAL
+// for every chunk, so they live in the SYSTEM prompt. DeepSeek's server-side
+// context cache reuses this large static prefix across the parallel chunk calls
+// (cache-hit tokens are far cheaper) — only the per-chunk ledger list varies.
+const SYSTEM_PROMPT =
+  'You are a senior Indian Chartered Accountant preparing a Schedule III (Division I, ' +
+  'Companies Act 2013) balance sheet. You map trial-balance ledgers to the correct ' +
+  'Face head and Note grouping, and you draft tidy Sub-Note presentation groups. ' +
+  'You never invent Face or Note values outside the supplied controlled vocabulary. ' +
+  'Return ONLY valid JSON.\n\n' + `You are filling the Schedule III Automation Tool's grouping columns. The
 tool ENFORCES these exact data validations (dependent dropdowns):
   * Face grouping (col G): must be one of the Face heads listed below.
   * Note grouping (col H): dependent dropdown = INDIRECT(SUBSTITUTE(Face," ","_")).
@@ -342,11 +331,25 @@ RULES
    - Title Case, <= 6 words, no trailing punctuation, consistent across siblings.
 6. confidence: 0-1. reason: <= 12 words, why this head/note.
 
-LEDGERS (JSON):
-${JSON.stringify(ledgers)}
-
-RETURN ONLY THIS JSON (one object per ledger, same i):
+Each user message gives a LEDGERS JSON array. RETURN ONLY this JSON, one object
+per ledger with the same "i":
 {"mappings":[{"i":0,"face":"","note":"","subNote":"","action":"fill|keep|change","confidence":0.0,"reason":""}]}`;
+
+// Per-chunk user prompt — ONLY the varying ledger list (keeps the cached prefix
+// in the system prompt intact for DeepSeek context caching).
+function buildUserPrompt(chunk) {
+  const ledgers = chunk.map((r) => ({
+    i: r.idx,
+    ledger: r.ledger,
+    sysGroup: [r.sysPrimary, r.sysParent].filter(Boolean).join(' > ') || undefined,
+    amount: r.amount ?? undefined,
+    curFace: r.curFace || undefined,
+    curNote: r.curNote || undefined,
+    curSub: r.curSub || undefined,
+    pyFace: r.pyFace || undefined,
+    pyNote: r.pyNote || undefined,
+  }));
+  return `LEDGERS (JSON):\n${JSON.stringify(ledgers)}`;
 }
 
 // Key AI mappings by NUMERIC index. DeepSeek's json_object sometimes emits "i"
