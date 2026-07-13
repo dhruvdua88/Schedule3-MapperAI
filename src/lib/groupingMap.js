@@ -779,6 +779,9 @@ const _DSUB_RULES = [
   // Staff imprests (petty-cash floats) are immaterial and shown in aggregate —
   // collapse the per-person lines to ONE "Imprest to Staff" presentation line.
   { re: /\bimprest\b/i,                                 side: 'asset', sub: 'Imprest to Staff' },
+  // All prepayments (insurance / rent / AMC / etc.) present as one "Prepaid
+  // Expenses" line on the face.
+  { re: /\bprepaid\b/i,                                 side: 'asset', sub: 'Prepaid Expenses' },
 ];
 export function applyDeterministicSubNotes(results) {
   let n = 0;

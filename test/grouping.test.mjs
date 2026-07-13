@@ -107,6 +107,15 @@ t('applyDeterministicSubNotes: imprests collapse to one line', () => {
   applyDeterministicSubNotes(rows);
   assert.ok(rows.every((r) => r.subNote === 'Imprest to Staff'), 'all imprests -> one line');
 });
+t('applyDeterministicSubNotes: all prepayments -> Prepaid Expenses', () => {
+  const rows = [
+    row({ ledger: 'Prepaid Insurance', face: 'Other current assets', subNote: 'Prepaid Insurance' }),
+    row({ ledger: 'Prepaid Rent', face: 'Other current assets', subNote: 'Prepaid Rent' }),
+    row({ ledger: 'Prepaid expenses', face: 'Other current assets', subNote: 'Prepaid Expenses' }),
+  ];
+  applyDeterministicSubNotes(rows);
+  assert.ok(rows.every((r) => r.subNote === 'Prepaid Expenses'), 'all prepaid -> one line');
+});
 t('applyDeterministicSubNotes: RCM input (asset) -> GST Input Credit; RCM payable (liab) -> GST Payable', () => {
   const rows = [
     row({ ledger: 'RCM CGST', face: 'Other current assets', subNote: 'RCM CGST Input' }),
