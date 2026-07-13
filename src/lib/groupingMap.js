@@ -885,6 +885,9 @@ export function formatSubNote(raw) {
     // noun typed in caps (BAJAJ, NOIDA, DELHI) than an acronym — those Title-Case;
     // genuine 5-char acronyms (GSTIN, UTGST) are kept via the allow-list above.
     if (!_NOT_ACRONYM_WORDS.has(up) && /^[A-Z0-9]{2,4}$/.test(w) && !/[a-z]/.test(w)) return w;
+    // A lone letter that prefixes a unit/plot code ("A-143", "B-35") -> uppercase,
+    // not lowercased as the article "a".
+    if (w.length === 1 && full[offset + 1] === '-' && /[0-9]/.test(full[offset + 2] || '')) return up;
     const lw = w.toLowerCase();
     const atWordStart = offset === 0 || full[offset - 1] === ' ';
     if (offset > 0 && atWordStart && _SUBNOTE_SMALL.has(lw)) return lw; // small joining word

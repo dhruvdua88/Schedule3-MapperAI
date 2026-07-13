@@ -60,6 +60,11 @@ t('formatSubNote: strips leading/trailing separators, collapses doubled', () => 
   assert.equal(formatSubNote('& Something'), 'Something');
   assert.equal(formatSubNote('Foo -- Bar'), 'Foo - Bar');
 });
+t('formatSubNote: uppercases a lone letter prefixing a unit/plot code', () => {
+  assert.equal(formatSubNote('Rent Noida WH a-143'), 'Rent Noida WH A-143');
+  assert.equal(formatSubNote('Plot b-35'), 'Plot B-35');
+  assert.equal(formatSubNote('A-143 Warehouse'), 'A-143 Warehouse');
+});
 t('formatSubNote: lowercases ordinal suffixes after digits', () => {
   assert.equal(formatSubNote('Rent Noida 2Nd Floor'), 'Rent Noida 2nd Floor');
   assert.equal(formatSubNote('23Rd Street'), '23rd Street');
