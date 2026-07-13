@@ -1185,6 +1185,10 @@ RULES
      Interest on LATE / DELAYED STATUTORY dues (GST, TDS, income tax, customs,
      PF) is a penal charge, NOT a borrowing cost -> "Other expenses" > "Rates
      and taxes". Keep all such statutory-interest ledgers consistent.
+   - BANK CHARGES: general bank / account-maintenance / transaction charges are
+     NOT a finance cost -> "Other expenses" > "Other Business Administrative
+     Expenses". Only borrowing-related fees (loan processing / arrangement /
+     prepayment) -> "Finance costs" > "Other borrowing costs".
    - Imprest / staff advance / salary advance (debit) is an EMPLOYEE advance ->
      "Short term loans and advances" > "Loans and advances to employees" (not
      "Others" or "Advances to suppliers").
