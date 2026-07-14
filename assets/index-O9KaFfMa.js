@@ -1255,7 +1255,8 @@ RULES
      (CGST/SGST/IGST/import/RCM payable) -> "GST Payable"; TDS payable -> "TDS
      Payable"; TDS receivable -> "TDS Receivable"; provident fund -> "PF Payable";
      ESI/ESIC -> "ESIC Payable"; profession tax -> "Profession Tax Payable"; any
-     staff imprest -> "Imprest to Staff"; any prepayment -> "Prepaid Expenses".
+     staff imprest -> "Imprest to Staff"; any prepayment -> "Prepaid Expenses";
+     bank / account charges (incl. their GST component) -> "Bank Charges".
    - LEAVE subNote BLANK ("") for Trade payables (creditors) and Trade
      receivables (debtors) — these are shown in aggregate with an MSME/others +
      ageing schedule, NOT by individual party. Never put a party name there.
