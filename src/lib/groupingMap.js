@@ -939,6 +939,9 @@ export function formatSubNote(raw) {
       .replace(/\s*[@(]?\s*\d+(?:\.\d+)?\s*%\s*(?:c|s|i|ut)?gst\)?$/i, '')
       .replace(/\s*@\s*\d+(?:\.\d+)?\s*%$/i, '')
       .replace(/\s*\(\s*gst\s*\)$/i, '')
+      // dash-separated GST-component suffix ("Bank Charges - GST" -> "Bank
+      // Charges"); the dash requirement spares "Interest on GST" (GST is the object).
+      .replace(/\s*[-–—]\s*gst$/i, '')
       .trim();
     if (stripped) s = stripped;
   }

@@ -163,6 +163,8 @@ t('formatSubNote: strips trailing GST-rate noise, no harm to real labels', () =>
   assert.equal(formatSubNote('Printing & Stationery'), 'Printing & Stationery');
   assert.equal(formatSubNote('GST Payable'), 'GST Payable');
   assert.equal(formatSubNote('GST Input Credit'), 'GST Input Credit');
+  assert.equal(formatSubNote('Bank Charges - GST'), 'Bank Charges');       // dash GST-component suffix
+  assert.equal(formatSubNote('Interest on GST'), 'Interest on GST');        // GST is the object -> kept
 });
 t('formatSubNote: consistent company suffixes', () => {
   assert.equal(formatSubNote('Bajaj Finance Limited'), 'Bajaj Finance Ltd');
